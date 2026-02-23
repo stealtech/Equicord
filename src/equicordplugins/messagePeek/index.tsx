@@ -8,16 +8,17 @@ import "./style.css";
 
 import { DecoratorProps } from "@api/MemberListDecorators";
 import { isPluginEnabled } from "@api/PluginManager";
+import { definePluginSettings } from "@api/Settings";
 import betterActivities from "@equicordplugins/betterActivities";
 import showMeYourName from "@plugins/showMeYourName";
 import { Devs, EquicordDevs } from "@utils/constants";
 import { classNameFactory } from "@utils/css";
 import { classes } from "@utils/misc";
-import definePlugin from "@utils/types";
+import definePlugin, { OptionType } from "@utils/types";
 import { Activity, ApplicationStream, Channel, Message, OnlineStatus, User } from "@vencord/discord-types";
 import { MessageFlags } from "@vencord/discord-types/enums";
-import { findByCodeLazy, findByPropsLazy, findComponentByCodeLazy, findCssClassesLazy, findExportedComponentLazy, findLazy } from "@webpack";
-import { ChannelStore, MessageStore, Parser, RelationshipStore, SnowflakeUtils, UserStore, useStateFromStores } from "@webpack/common";
+import { findByCodeLazy, findByPropsLazy, findComponentByCodeLazy, findCssClassesLazy, findExportedComponentLazy } from "@webpack";
+import { ChannelStore, ExperimentStore, MessageStore, Parser, RelationshipStore, SnowflakeUtils, UserGuildSettingsStore, UserStore, useStateFromStores } from "@webpack/common";
 
 const cl = classNameFactory("vc-message-peek-");
 
@@ -27,9 +28,16 @@ const MessageActions = findByPropsLazy("fetchMessages", "sendMessage");
 
 const hasRelevantActivity: (props: ActivityCheckProps) => boolean = findByCodeLazy(".OFFLINE||", ".INVISIBLE)return!1");
 const ActivityText: React.ComponentType<ActivityTextProps> = findComponentByCodeLazy("hasQuest:", "hideEmoji:");
-const FavoritesServerExperiment = findLazy(m => m?.definition?.id === "2021-09_favorites_server");
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
+
+const settings = definePluginSettings({
+    hideMuted: {
+        type: OptionType.BOOLEAN,
+        description: "Hide message previews and timestamps for muted DMs and group chats.",
+        default: false
+    }
+});
 
 type AttachmentType = "image" | "gif" | "video" | "file";
 type IconType = AttachmentType | "voice" | "sticker";
@@ -151,7 +159,7 @@ function MessagePreviewContent({ channel, user }: { channel: Channel; user: User
         return <>Official Discord Message</>;
     }
 
-    const smynName = isPluginEnabled(showMeYourName.name) ? showMeYourName.getMemberListProfilesReactionsVoiceNameText({ user: user ?? lastMessage?.author, type: "membersList" }) : null;
+    const smynName = isPluginEnabled(showMeYourName.name) ? showMeYourName.getTypingMemberListProfilesReactionsVoiceNameText({ user: user ?? lastMessage?.author, type: "membersList" }) : null;
 
     if (!lastMessage) {
         if (channel.isMultiUserDM()) return <>{channel.recipients.length + 1} Members</>;
@@ -216,7 +224,7 @@ function Timestamp({ channel }: { channel: Channel; }) {
     if (!lastMessage) return null;
 
     const timestamp = SnowflakeUtils.extractTimestamp(lastMessage.id);
-    const className = FavoritesServerExperiment.getCurrentConfig().favoritesEnabled ? cl("timestamp-favorites") : cl("timestamp");
+    const className = ExperimentStore.getUserExperimentBucket("2021-09_favorites_server") >= 1 ? cl("timestamp-favorites") : cl("timestamp");
     return <span className={className}>{formatRelativeTime(timestamp)}</span>;
 }
 
@@ -232,6 +240,7 @@ export default definePlugin({
     name: "MessagePeek",
     description: "Shows the last message preview and timestamp in the Direct Messages list.",
     authors: [Devs.prism, EquicordDevs.justjxke],
+    settings,
     patches: [
         {
             find: "PrivateChannel.renderAvatar",
@@ -253,11 +262,28 @@ export default definePlugin({
 
     renderMemberListDecorator({ channel }: DecoratorProps) {
         if (!channel) return null;
+        if (settings.store.hideMuted && UserGuildSettingsStore.isChannelMuted(null!, channel.id)) return null;
         return <Timestamp channel={channel} />;
     },
 
     getSubText(props: PrivateChannelProps) {
         const { channel, user, activities, status, applicationStream, voiceChannel } = props;
+
+        if (settings.store.hideMuted && UserGuildSettingsStore.isChannelMuted(null!, channel.id)) {
+            const hasActivity = hasRelevantActivity({ activities, status, applicationStream, voiceChannel });
+            if (hasActivity) {
+                return (
+                    <ActivityText
+                        user={user}
+                        activities={activities}
+                        voiceChannel={voiceChannel}
+                        applicationStream={applicationStream}
+                    />
+                );
+            }
+            return null;
+        }
+
         const lastMessage = MessageStore.getLastMessage(channel.id) as Message | undefined;
         const hasActivity = hasRelevantActivity({ activities, status, applicationStream, voiceChannel });
         const showActivity = shouldShowActivity(lastMessage, hasActivity);

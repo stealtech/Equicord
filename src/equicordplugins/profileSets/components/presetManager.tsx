@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { Button } from "@components/Button";
 import { Heading } from "@components/Heading";
-import { Button } from "@components/index";
 import { classes } from "@utils/misc";
 import { openModal } from "@utils/modal";
 import { React, SelectedGuildStore, TextInput, useStateFromStores } from "@webpack/common";
@@ -137,7 +137,7 @@ export function PresetManager({ section, guildId }: PresetManagerProps) {
         });
     };
 
-    const avatarSize = settings.store.avatarSize || 40;
+    const { avatarSize } = settings.store;
     const hasPresets = presets.length > 0;
     const shouldShowPagination = filteredPresets.length > PRESETS_PER_PAGE;
 
