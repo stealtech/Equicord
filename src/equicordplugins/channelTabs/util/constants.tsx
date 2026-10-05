@@ -31,7 +31,7 @@ function AnimationSettings(): JSX.Element {
         { label: "Plus Button Pulse", value: "plus-pulse", selected: settings.store.animationPlusPulse },
         { label: "Mention Badge Glow", value: "mention-glow", selected: settings.store.animationMentionGlow },
         { label: "Compact Mode Expansion", value: "compact-expand", selected: settings.store.animationCompactExpand },
-        { label: "Selected Tab Blue Border", value: "selected-border", selected: settings.store.animationSelectedBorder },
+        { label: "Selected Tab Accent Border", value: "selected-border", selected: settings.store.animationSelectedBorder },
         { label: "Selected Tab Background Color", value: "selected-background", selected: settings.store.animationSelectedBackground },
         { label: "Tab Shadow Effects", value: "tab-shadows", selected: settings.store.animationTabShadows },
         { label: "Tab Repositioning (smooth position changes)", value: "tab-positioning", selected: settings.store.animationTabPositioning },
@@ -39,11 +39,9 @@ function AnimationSettings(): JSX.Element {
         { label: "Active Quests Gradient", value: "quests-active", selected: settings.store.animationQuestsActive }
     ];
 
-    const [currentValue, setCurrentValue] = useState(animationOptions.filter(option => option.selected));
+    const [currentValue, setCurrentValue] = useState(animationOptions.filter(option => option.selected).map(option => option.value));
 
-    function updateSettingsTruthy(enabled: DynamicDropdownSettingOption[]) {
-        const enabledValues = enabled.map(option => option.value);
-
+    function updateSettingsTruthy(enabledValues: string[]) {
         animationOptions.forEach(option => {
             option.selected = enabledValues.includes(option.value);
         });
@@ -64,23 +62,24 @@ function AnimationSettings(): JSX.Element {
         settings.store.animationResizeHandle = enabledValues.includes("resize-handle");
         settings.store.animationQuestsActive = enabledValues.includes("quests-active");
 
-        setCurrentValue(enabled);
+        setCurrentValue(enabledValues);
     }
 
     function handleChange(values: Array<DynamicDropdownSettingOption | string>) {
-        if (values.length === 0) {
-            updateSettingsTruthy([]);
+        const valueStrings = values.map(v => typeof v === "string" ? v : v.value);
+        const toggled = valueStrings.length > currentValue.length
+            ? valueStrings.find(v => !currentValue.includes(v))
+            : currentValue.find(v => !valueStrings.includes(v));
+
+        if (toggled == null) {
+            updateSettingsTruthy(valueStrings);
             return;
         }
 
-        const stringlessValues = values.filter(v => typeof v !== "string") as DynamicDropdownSettingOption[];
-        const selectedOption = values.find(v => typeof v === "string") as string;
-        const option = animationOptions.find(option => option.value === selectedOption) as DynamicDropdownSettingOption;
-
-        if (option.selected) {
-            updateSettingsTruthy(stringlessValues.filter(v => v.value !== selectedOption));
+        if (currentValue.includes(toggled)) {
+            updateSettingsTruthy(currentValue.filter(v => v !== toggled));
         } else {
-            updateSettingsTruthy([...stringlessValues, option]);
+            updateSettingsTruthy([...currentValue, toggled]);
         }
     }
 
@@ -109,14 +108,14 @@ function AnimationSettings(): JSX.Element {
 export const logger = new Logger("ChannelTabs");
 
 export const bookmarkFolderColors = {
-    Red: "var(--channeltabs-red)",
-    Blue: "var(--channeltabs-blue)",
-    Yellow: "var(--channeltabs-yellow)",
-    Green: "var(--channeltabs-green)",
-    Black: "var(--channeltabs-black)",
-    White: "var(--channeltabs-white)",
-    Orange: "var(--channeltabs-orange)",
-    Pink: "var(--channeltabs-pink)"
+    Red: "#f23f42",
+    Blue: "#0052b6",
+    Yellow: "#f0b132",
+    Green: "#24934f",
+    Black: "#000",
+    White: "#fff",
+    Orange: "#e67e22",
+    Pink: "#ff73fa"
 } as const;
 
 export const settings = definePluginSettings({
@@ -140,11 +139,6 @@ export const settings = definePluginSettings({
         type: OptionType.COMPONENT,
         default: {}
     },
-    noPomeloNames: {
-        description: "Use display names instead of usernames for DM's",
-        type: OptionType.BOOLEAN,
-        default: false
-    },
     showStatusIndicators: {
         description: "Show status indicators for DM's",
         type: OptionType.BOOLEAN,
@@ -160,6 +154,12 @@ export const settings = definePluginSettings({
         type: OptionType.BOOLEAN,
         default: true
     },
+    persistUnreadCountFallback: {
+        description: "Persist unread badge fallbacks across reloads for tabs and bookmarks",
+        type: OptionType.BOOLEAN,
+        default: true,
+        restartNeeded: false
+    },
     widerTabsAndBookmarks: {
         description: "Extend the length of tabs and bookmarks for larger monitors",
         type: OptionType.BOOLEAN,
@@ -171,6 +171,12 @@ export const settings = definePluginSettings({
         description: "Tab width scale (percentage) - adjustable by dragging tab edges",
         default: 100,
         hidden: true,
+        restartNeeded: false
+    },
+    tabHeightScale: {
+        type: OptionType.NUMBER,
+        description: "Tab height scale (percentage).",
+        default: 100,
         restartNeeded: false
     },
     renderAllTabs: {

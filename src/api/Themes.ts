@@ -16,15 +16,28 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Settings, SettingsStore } from "@api/Settings";
+import { Settings, SettingsStore, type ThemeActivationMode } from "@api/Settings";
 import { createAndAppendStyle } from "@utils/css";
+import { isNonNullish } from "@utils/guards";
 import { ThemeStore } from "@vencord/discord-types";
 import { PopoutWindowStore } from "@webpack/common";
 
-import { userStyleRootNode, vencordRootNode } from "./Styles";
+import { coreStyleRootNode, managedStyleRootNode, userStyleRootNode, vencordRootNode } from "./Styles";
 
 let style: HTMLStyleElement;
 let themesStyle: HTMLStyleElement;
+
+const themeChangeListeners = new Set<() => void>();
+
+function getThemeActivationMode(themeId: string) {
+    return Settings.themeActivationModes?.[themeId] ?? "always";
+}
+
+function shouldApplyTheme(mode: ThemeActivationMode, activeTheme?: "light" | "dark") {
+    if (mode === "always") return true;
+    if (!activeTheme) return false;
+    return mode === activeTheme;
+}
 
 async function toggle(isEnabled: boolean) {
     if (!style) {
@@ -42,6 +55,9 @@ async function toggle(isEnabled: boolean) {
         style.disabled = !isEnabled;
 }
 
+// for cleanup
+let previousThemeBlobObjectURLs = [] as string[];
+
 async function initThemes() {
     themesStyle ??= createAndAppendStyle("vencord-themes", userStyleRootNode);
 
@@ -55,42 +71,68 @@ async function initThemes() {
         ? undefined
         : ThemeStore.theme === "light" ? "light" : "dark";
 
-    const links = enabledThemeLinks
-        .map(rawLink => {
-            const match = /^@(light|dark) (.*)/.exec(rawLink);
-            if (!match) return rawLink;
+    const links = new Set<string>();
 
-            const [, mode, link] = match;
-            return mode === activeTheme ? link : null;
-        })
-        .filter(link => link !== null);
+    for (const rawLink of enabledThemeLinks) {
+        const match = /^@(light|dark) (.*)/.exec(rawLink);
+        const link = match?.[2] ?? rawLink;
+        const mode = getThemeActivationMode(rawLink);
 
-    if (IS_WEB) {
-        for (const theme of enabledThemes) {
-            const themeData = await VencordNative.themes.getThemeData(theme);
-            if (!themeData) continue;
-            const blob = new Blob([themeData], { type: "text/css" });
-            links.push(URL.createObjectURL(blob));
+        if (shouldApplyTheme(mode, activeTheme)) {
+            links.add(link);
         }
-    } else {
-        const localThemes = enabledThemes.map(theme => `vencord:///themes/${theme}?v=${Date.now()}`);
-        links.push(...localThemes);
     }
 
-    themesStyle.textContent = links.map(link => `@import url("${link.trim()}");`).join("\n");
+    if (IS_WEB) {
+        previousThemeBlobObjectURLs.forEach(url => URL.revokeObjectURL(url));
+
+        const themesToApply = enabledThemes.filter(theme =>
+            shouldApplyTheme(getThemeActivationMode(theme), activeTheme)
+        );
+
+        const objectUrls = await Promise.all(themesToApply.map(async theme => {
+            const themeData = await VencordNative.themes.getThemeData(theme);
+            if (!themeData) return null;
+
+            const blob = new Blob([themeData], { type: "text/css" });
+            return URL.createObjectURL(blob);
+        }));
+
+        previousThemeBlobObjectURLs = objectUrls.filter(isNonNullish);
+        previousThemeBlobObjectURLs.forEach(url => links.add(url));
+    } else {
+        const version = Date.now();
+        for (const theme of enabledThemes) {
+            const mode = getThemeActivationMode(theme);
+            if (!shouldApplyTheme(mode, activeTheme)) continue;
+            links.add(`vencord:///themes/${theme}?v=${version}`);
+        }
+    }
+
+    themesStyle.textContent = Array.from(links).map(link => `@import url("${link.trim()}");`).join("\n");
     updatePopoutWindows();
+    themeChangeListeners.forEach(listener => listener());
 }
 
 function applyToPopout(popoutWindow: Window | undefined, key: string) {
     if (!popoutWindow?.document) return;
-    // skip game overlay cuz it needs to stay transparent, themes broke it
-    if (key === "DISCORD_OutOfProcessOverlay") return;
 
     const doc = popoutWindow.document;
 
     doc.querySelector("vencord-root")?.remove();
 
-    doc.documentElement.appendChild(vencordRootNode.cloneNode(true));
+    const clonedRoot = vencordRootNode.cloneNode(false) as HTMLElement;
+
+    clonedRoot.append(
+        coreStyleRootNode.cloneNode(true),
+        managedStyleRootNode.cloneNode(true)
+    );
+
+    if (key !== "DISCORD_OutOfProcessOverlay") {
+        clonedRoot.append(userStyleRootNode.cloneNode(true));
+    }
+
+    doc.documentElement.appendChild(clonedRoot);
 }
 
 function updatePopoutWindows() {
@@ -111,6 +153,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     SettingsStore.addChangeListener("enabledThemeLinks", initThemes);
     SettingsStore.addChangeListener("enabledThemes", initThemes);
+    SettingsStore.addChangeListener("themeActivationModes", initThemes);
 
     window.addEventListener("message", event => {
         const { discordPopoutEvent } = event.data || {};
@@ -136,4 +179,12 @@ export function initQuickCssThemeStore(themeStore: ThemeStore) {
         currentTheme = themeStore.theme;
         initThemes();
     });
+}
+
+export function addThemeChangeListener(listener: () => void) {
+    themeChangeListeners.add(listener);
+}
+
+export function removeThemeChangeListener(listener: () => void) {
+    themeChangeListeners.delete(listener);
 }

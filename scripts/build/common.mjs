@@ -79,11 +79,12 @@ export async function buildOrWatchAll(buildConfigs) {
             context(cfg).then(ctx => ctx.watch())
         ));
     } else {
-        await Promise.all(buildConfigs.map(cfg => build(cfg)))
-            .catch(error => {
+        for (const cfg of buildConfigs) {
+            await build(cfg).catch(error => {
                 console.error(error.message);
-                process.exit(1); // exit immediately to skip the rest of the builds
+                process.exit(1);
             });
+        }
     }
 }
 
@@ -146,7 +147,7 @@ export const globPlugins = kind => ({
         });
 
         build.onLoad({ filter, namespace: "import-plugins" }, async () => {
-            const pluginDirs = ["plugins/_api", "plugins/_core", "plugins", "userplugins", "equicordplugins", "equicordplugins/_api"];
+            const pluginDirs = ["plugins/_api", "plugins/_core", "plugins", "equicordplugins/_api", "equicordplugins/_core", "equicordplugins", "userplugins"];
             let code = "";
             let pluginsCode = "\n";
             let metaCode = "\n";
@@ -170,6 +171,7 @@ export const globPlugins = kind => ({
                         const excluded =
                             (target === "dev" && !IS_DEV) ||
                             (target === "web" && kind === "discordDesktop") ||
+                            (target === "browser" && kind !== "web") ||
                             (target === "desktop" && kind === "web") ||
                             (target === "discordDesktop" && kind !== "discordDesktop") ||
                             (target === "vesktop" && kind !== "vesktop" && kind !== "equibop") ||

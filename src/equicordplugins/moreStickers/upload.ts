@@ -6,13 +6,13 @@
 
 import { getMimeFromExtension } from "@equicordplugins/fileUpload/utils/getMediaUrl";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile } from "@ffmpeg/util";
 import { insertTextIntoChatInputBox, MessageOptions } from "@utils/discord";
 import { CloudUploadPlatform } from "@vencord/discord-types/enums";
-import { ChannelStore, CloudUploader, Constants, DraftStore, FluxDispatcher, MessageActions, PendingReplyStore, RestAPI, showToast, SnowflakeUtils, Toasts, UploadHandler } from "@webpack/common";
+import { ChannelStore, CloudUploader, Constants, DraftStore, FluxDispatcher, MessageActions, PendingReplyStore, RestAPI, showToast, SnowflakeUtils, UploadHandler } from "@webpack/common";
 
 import { settings } from ".";
 import { FFmpegState, Sticker } from "./types";
+import { corsFetch } from "./utils";
 
 type SendStickerOptions = {
     channelId: string;
@@ -75,7 +75,10 @@ async function resizeImage(url: string) {
 
 async function toGIF(url: string, ffmpeg: FFmpeg): Promise<File> {
     const filename = (new URL(url)).pathname.split("/").pop() ?? "image.png";
-    await ffmpeg.writeFile(filename, await fetchFile(url));
+    const res = await corsFetch(url);
+    if (!res.ok) throw new Error("Failed to fetch image for GIF conversion");
+    const arr = new Uint8Array(await res.arrayBuffer());
+    await ffmpeg.writeFile(filename, arr);
 
     const outputFilename = "output.gif";
     await ffmpeg.exec(["-i", filename,
@@ -127,9 +130,15 @@ export async function sendSticker({ channelId, sticker, ctrlKey, shiftKey, ffmpe
         if (!ffmpegState?.ffmpeg || !ffmpegState.isLoaded) throw new Error("FFmpeg not ready");
         file = await toGIF(sticker.image, ffmpegState.ffmpeg);
     } else {
-        const res = await fetch(sticker.image);
+        const res = await corsFetch(sticker.image);
+        if (!res.ok) throw new Error("Failed to fetch sticker image");
         const blobUrl = URL.createObjectURL(await res.blob());
-        const processed = await resizeImage(blobUrl);
+        let processed: Blob;
+        try {
+            processed = await resizeImage(blobUrl);
+        } finally {
+            URL.revokeObjectURL(blobUrl);
+        }
         const filename = sticker.filename ?? new URL(sticker.image).pathname.split("/").pop()!;
         const mimeType = getMimeFromExtension(filename.split(".").pop());
 
@@ -160,7 +169,7 @@ export async function sendSticker({ channelId, sticker, ctrlKey, shiftKey, ffmpe
         });
     });
 
-    upload.on("error", () => showToast("Failed to upload sticker", Toasts.Type.FAILURE));
+    upload.on("error", () => showToast("Failed to upload sticker", "failure"));
 
     upload.upload();
 }

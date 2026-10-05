@@ -10,8 +10,8 @@ import { Notice } from "@components/Notice";
 import { EquicordDevs } from "@utils/constants";
 import definePlugin, { OptionType } from "@utils/types";
 import { Channel, User, VoiceState } from "@vencord/discord-types";
-import { findByPropsLazy, findStoreLazy } from "@webpack";
-import { Menu, React, VoiceStateStore } from "@webpack/common";
+import { findByPropsLazy } from "@webpack";
+import { Menu, React, RelationshipStore, UserStore, VoiceStateStore } from "@webpack/common";
 
 type TFollowedUserInfo = {
     lastChannelId: string;
@@ -27,8 +27,6 @@ interface UserContextProps {
 let followedUserInfo: TFollowedUserInfo = null;
 
 const voiceChannelAction = findByPropsLazy("selectVoiceChannel");
-const UserStore = findStoreLazy("UserStore");
-const RelationshipStore = findStoreLazy("RelationshipStore");
 
 const settings = definePluginSettings({
     onlyWhenInVoice: {
@@ -74,6 +72,7 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { channel, 
 export default definePlugin({
     name: "FollowVoiceUser",
     description: "Follow a friend in voice chat.",
+    tags: ["Voice"],
     authors: [EquicordDevs.TheArmagan],
     settings,
     settingsAboutComponent: () => (

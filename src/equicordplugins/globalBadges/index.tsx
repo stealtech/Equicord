@@ -7,24 +7,22 @@
 import "./styles.css";
 
 import { BadgePosition, ProfileBadge } from "@api/Badges";
-import { migratePluginSetting } from "@api/Settings";
 import { Button } from "@components/Button";
 import { BadgeContextMenu } from "@plugins/_api/badges";
 import { Devs, EquicordDevs } from "@utils/constants";
 import { openInviteModal } from "@utils/discord";
 import definePlugin from "@utils/types";
-import { ContextMenuApi, React, Toasts, UserStore } from "@webpack/common";
+import { ContextMenuApi, React, showToast } from "@webpack/common";
 
-import { openBadgeModal } from "./badgeModal";
 import { settings } from "./settings";
 import { cl, GlobalBadges, INVITE_LINK, loadBadges } from "./utils";
 
 let intervalId: any;
 
-migratePluginSetting("GlobalBadges", "showRaincord", "showRa1ncord");
 export default definePlugin({
     name: "GlobalBadges",
     description: "Adds global badges from other client mods",
+    tags: ["Appearance"],
     authors: [Devs.HypedDomi, EquicordDevs.Wolfie, Devs.thororen],
     settings,
     settingsAboutComponent: () => (
@@ -49,18 +47,15 @@ export default definePlugin({
     toolboxActions: {
         async "Refetch Global Badges"() {
             await loadBadges();
-            Toasts.show({
-                id: Toasts.genId(),
-                message: "Successfully refetched global badges!",
-                type: Toasts.Type.SUCCESS
-            });
+            showToast("Successfully refetched global badges!", "success");
         }
     },
     get GlobalBadges() {
         return GlobalBadges;
     },
     getGlobalBadges(userId: string) {
-        return GlobalBadges[userId]?.map(badge => ({
+        return GlobalBadges[userId]?.map((badge, idx) => ({
+            id: `global_badges_badge_${idx}`,
             iconSrc: badge.badge,
             description: badge.tooltip,
             position: BadgePosition.START,
@@ -72,9 +67,6 @@ export default definePlugin({
             },
             onContextMenu(event, badge) {
                 ContextMenuApi.openContextMenu(event, () => <BadgeContextMenu badge={badge} />);
-            },
-            onClick() {
-                return openBadgeModal(UserStore.getUser(userId));
             },
         } satisfies ProfileBadge));
     }

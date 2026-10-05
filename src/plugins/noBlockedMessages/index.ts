@@ -22,10 +22,7 @@ import { Devs, EquicordDevs } from "@utils/constants";
 import { Logger } from "@utils/Logger";
 import definePlugin, { OptionType } from "@utils/types";
 import { Message, User } from "@vencord/discord-types";
-import { findStoreLazy } from "@webpack";
-import { MessageStore, RelationshipStore } from "@webpack/common";
-
-const ReferencedMessageStore = findStoreLazy("ReferencedMessageStore");
+import { MessageStore, ReferencedMessageStore, RelationshipStore } from "@webpack/common";
 
 interface ChannelStreamDividerProps {
     type: "DIVIDER",
@@ -90,21 +87,28 @@ export default definePlugin({
     name: "NoBlockedMessages",
     description: "Hide all blocked/ignored messages from chat completely.",
     authors: [Devs.rushii, Devs.Samu, Devs.jamesbt365, Devs.Elvyra, EquicordDevs.Etorix],
+    tags: ["Accessibility", "Chat"],
     isModified: true,
     settings,
     patches: [
-        ...[
-            '"MessageStore"',
-            '"ReadStateStore"'
-        ].map(find => ({
-            find,
+        {
+            find: '"MessageStore"',
             replacement: [
                 {
-                    match: /(?<=function (\i)\((\i)\){)(?=.*MESSAGE_CREATE:\1)/,
-                    replace: (_, _funcName, props) => `if($self.disableNotification(${props}.message)){return;};`
+                    match: /(?<=MESSAGE_CREATE:function\((\i)\){)/,
+                    replace: (_, props) => `if($self.disableNotification(${props}.message))return;`
                 }
             ]
-        })),
+        },
+        {
+            find: '"ReadStateStore"',
+            replacement: [
+                {
+                    match: /(?<=MESSAGE_CREATE:function\((\i)\){)/,
+                    replace: (_, props) => `if($self.disableNotification(${props}.message))return;`
+                }
+            ]
+        },
         {
             find: "`forum-post-action-bar-",
             replacement: [

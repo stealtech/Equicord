@@ -23,7 +23,7 @@ import definePlugin, { OptionType, ReporterTestable } from "@utils/types";
 
 import { initWs, socket, stopWs } from "./initWs";
 export const PORT = 8485;
-export const CLIENT_VERSION: readonly [major: number, minor: number, patch: number] = [0, 1, 2];
+export const CLIENT_VERSION: readonly [major: number, minor: number, patch: number] = [0, 1, 3];
 
 export const logger = new Logger("DevCompanion");
 
@@ -48,6 +48,7 @@ export const settings = definePluginSettings({
 export default definePlugin({
     name: "DevCompanion",
     description: "Dev Companion Plugin. Please report anything not working or being weird (most likely its a bug) to sadan, either ping or dm, thanks!",
+    tags: ["Developers", "Utility"],
     authors: [Devs.Ven, Devs.sadan],
     reporterTestable: ReporterTestable.None,
     isModified: true,

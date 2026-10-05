@@ -34,9 +34,12 @@ import * as $Notices from "./Notices";
 import * as $Notifications from "./Notifications";
 import * as $UserArea from "./UserArea";
 export * as PluginManager from "./PluginManager";
+import * as $ProfileCollections from "./ProfileCollections";
+import * as $ProfileSections from "./ProfileSections";
 import * as $ServerList from "./ServerList";
 import * as $Settings from "./Settings";
 import * as $Styles from "./Styles";
+import * as $SurfaceClasses from "./SurfaceClasses";
 import * as $Themes from "./Themes";
 import * as $UserSettings from "./UserSettings";
 
@@ -94,6 +97,12 @@ export const Badges = $Badges;
  * An API allowing you to add custom elements to the server list.
  */
 export const ServerList = $ServerList;
+
+/**
+ * An API allowing plugins to add semantic data attributes and limited props
+ * to stable Discord layout surfaces without patching them directly.
+ */
+export const SurfaceClasses = $SurfaceClasses;
 
 /**
  * An API allowing you to add components as message accessories.
@@ -170,3 +179,13 @@ export const UserArea = $UserArea;
  * Just used to identify if user is on Equicord as Vencord doesn't have this.
  */
 export const isEquicord = true;
+
+/**
+ * An API allowing you to add other collections where discords game collection is.
+ */
+export const ProfileCollections = $ProfileCollections;
+
+/**
+ * An API allowing you to add sections near the 'Member Since' area of user profile panels.
+ */
+export const ProfileSections = $ProfileSections;

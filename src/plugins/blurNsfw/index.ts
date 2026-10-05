@@ -12,20 +12,6 @@ import definePlugin, { OptionType } from "@utils/types";
 
 let style: HTMLStyleElement;
 
-function setCss() {
-    style.textContent = `
-        .vc-nsfw-img [class*=imageContainer],
-        .vc-nsfw-img [class*=wrapperPaused] {
-            filter: blur(${settings.store.blurAmount}px);
-            transition: filter 0.2s;
-
-            &:hover {
-                filter: blur(0);
-            }
-        }
-        `;
-}
-
 const settings = definePluginSettings({
     blurAmount: {
         type: OptionType.NUMBER,
@@ -40,9 +26,29 @@ const settings = definePluginSettings({
     },
 });
 
+function setCss() {
+    style.textContent = `
+        .vc-nsfw-img [class*=imageContainer] img,
+        .vc-nsfw-img [class*=imageContainer] video,
+        .vc-nsfw-img [class*=wrapperPaused] img,
+        .vc-nsfw-img [class*=wrapperPaused] video {
+            filter: blur(${settings.store.blurAmount}px);
+            transition: filter 0.2s;
+        }
+
+        .vc-nsfw-img [class*=imageContainer]:hover img,
+        .vc-nsfw-img [class*=imageContainer]:hover video,
+        .vc-nsfw-img [class*=wrapperPaused]:hover img,
+        .vc-nsfw-img [class*=wrapperPaused]:hover video {
+            filter: blur(0);
+        }
+        `;
+}
+
 export default definePlugin({
     name: "BlurNSFW",
     description: "Blur attachments in NSFW channels until hovered",
+    tags: ["Privacy", "Appearance"],
     authors: [Devs.Ven],
     isModified: true,
     settings,
@@ -53,7 +59,7 @@ export default definePlugin({
             replacement: [
                 {
                     match: /(\.renderReactions\(\i\).+?className:)/,
-                    replace: '$&(this.props?.channel?.nsfw || $self.settings.store.blurAllChannels ? "vc-nsfw-img ": "")+'
+                    replace: '$&(this?.props?.channel?.nsfw || $self.settings.store.blurAllChannels ? "vc-nsfw-img ": "")+'
                 }
             ]
         }

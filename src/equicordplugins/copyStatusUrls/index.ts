@@ -8,8 +8,9 @@ import { copyToClipboard } from "@utils/clipboard";
 import { Devs } from "@utils/constants";
 import definePlugin from "@utils/types";
 import { User } from "@vencord/discord-types";
+import { ToastPosition } from "@vencord/discord-types/enums";
 import { findByCodeLazy } from "@webpack";
-import { Toasts } from "@webpack/common";
+import { showToast } from "@webpack/common";
 
 interface MakeContextMenuProps {
     user: User,
@@ -23,6 +24,7 @@ const getMetadataFromApi: (activity: any, userId: string) => Promise<any> = find
 export default definePlugin({
     name: "CopyStatusUrls",
     description: "Copy the users status url when you right-click it",
+    tags: ["Activity", "Utility"],
     authors: [Devs.sadan],
 
     patches: [
@@ -43,24 +45,14 @@ export default definePlugin({
                     throw new Error("button_urls does not contain index");
                 }
                 copyToClipboard(button_urls[index]);
-                Toasts.show({
-                    id: Toasts.genId(),
-                    message: "Copied URL",
-                    type: Toasts.Type.SUCCESS,
-                    options: {
-                        position: Toasts.Position.TOP
-                    }
-                });
+                showToast("Copied URL", "success", {
+                        position: ToastPosition.TOP
+                    });
             } catch (e) {
                 console.error(e);
-                Toasts.show({
-                    id: Toasts.genId(),
-                    message: "Error copying URL, check console for more info",
-                    type: Toasts.Type.FAILURE,
-                    options: {
-                        position: Toasts.Position.TOP
-                    }
-                });
+                showToast("Error copying URL, check console for more info", "failure", {
+                        position: ToastPosition.TOP
+                    });
             }
         };
     }

@@ -12,12 +12,13 @@ import FriendCodesPanel from "./FriendCodesPanel";
 export default definePlugin({
     name: "FriendCodes",
     description: "Generate FriendCodes to easily add friends",
+    tags: ["Friends", "Utility"],
     authors: [Devs.HypedDomi],
     patches: [
         {
             find: "#{intl::ADD_FRIEND})}),(",
             replacement: {
-                match: /"header",.{0,30}children:\[.*?\{\}\)/,
+                match: /#{intl::ADD_FRIEND}.{0,15}\(\i,\{\}\)/,
                 replace: "$&,$self.FriendCodesPanel"
             },
             noWarn: true,

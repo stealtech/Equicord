@@ -19,28 +19,40 @@
 import "./checkNodeVersion.js";
 
 import { execFileSync, execSync } from "child_process";
-import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync, cpSync, rmSync } from "fs";
 import { dirname, join } from "path";
 import { Readable } from "stream";
 import { finished } from "stream/promises";
 import { fileURLToPath } from "url";
 
 const BASE_URL = "https://github.com/Equicord/Equilotl/releases/latest/download/";
-const INSTALLER_PATH_DARWIN = "Equilotl.app/Contents/MacOS/Equilotl";
-const INSTALLER_APP_DARWIN = "Equilotl.app";
 
 const BASE_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FILE_DIR = join(BASE_DIR, "dist", "Installer");
 const ETAG_FILE = join(FILE_DIR, "etag.txt");
 
+function byArch(files) {
+    return files[process.arch] ?? files.default;
+}
+
 function getFilename() {
     switch (process.platform) {
         case "win32":
-            return "EquilotlCli.exe";
+            return byArch({
+                arm64: "EquilotlCli-arm64.exe",
+                default: "EquilotlCli.exe"
+            });
         case "darwin":
-            return "Equilotl.MacOS.zip";
+            return byArch({
+                x64: "EquilotlCli-x64",
+                arm64: "EquilotlCli-arm64",
+                default: "EquilotlCli-universal"
+            });
         case "linux":
-            return "EquilotlCli-linux";
+            return byArch({
+                arm64: "EquilotlCli-linux-arm64",
+                default: "EquilotlCli-Linux"
+            });
         default:
             throw new Error("Unsupported platform: " + process.platform);
     }
@@ -52,14 +64,7 @@ async function ensureBinary() {
 
     mkdirSync(FILE_DIR, { recursive: true });
 
-    const downloadName = join(FILE_DIR, filename);
-    const outputFile = process.platform === "darwin"
-        ? join(FILE_DIR, INSTALLER_PATH_DARWIN)
-        : downloadName;
-    const outputApp = process.platform === "darwin"
-        ? join(FILE_DIR, INSTALLER_APP_DARWIN)
-        : null;
-
+    const outputFile = join(FILE_DIR, filename);
     const etag = existsSync(outputFile) && existsSync(ETAG_FILE)
         ? readFileSync(ETAG_FILE, "utf-8")
         : null;
@@ -80,32 +85,11 @@ async function ensureBinary() {
 
     writeFileSync(ETAG_FILE, res.headers.get("etag"));
 
-    if (process.platform === "darwin") {
-        console.log("Saving zip...");
-        const zip = new Uint8Array(await res.arrayBuffer());
-        writeFileSync(downloadName, zip);
-
-        console.log("Unzipping app bundle...");
-        execSync(`ditto -x -k '${downloadName}' '${FILE_DIR}'`);
-
-        console.log("Clearing quarantine from installer app (this is required to run it)");
-        console.log("xattr might error, that's okay");
-
-        const logAndRun = cmd => {
-            console.log("Running", cmd);
-            try {
-                execSync(cmd);
-            } catch { }
-        };
-        logAndRun(`sudo xattr -dr com.apple.quarantine '${outputApp}'`);
-    } else {
-        // WHY DOES NODE FETCH RETURN A WEB STREAM OH MY GOD
-        const body = Readable.fromWeb(res.body);
-        await finished(body.pipe(createWriteStream(outputFile, {
-            mode: 0o755,
-            autoClose: true
-        })));
-    }
+    const body = Readable.fromWeb(res.body);
+    await finished(body.pipe(createWriteStream(outputFile, {
+        mode: 0o755,
+        autoClose: true
+    })));
 
     console.log("Finished downloading!");
 

@@ -9,15 +9,16 @@ import "./style.css";
 import { DecoratorProps } from "@api/MemberListDecorators";
 import { isPluginEnabled } from "@api/PluginManager";
 import { definePluginSettings } from "@api/Settings";
+import { AttachmentIcon, GifIcon, ImageIcon, Microphone, StickerIcon, VideoIcon } from "@components/Icons";
 import betterActivities from "@equicordplugins/betterActivities";
 import showMeYourName from "@plugins/showMeYourName";
 import { Devs, EquicordDevs } from "@utils/constants";
 import { classNameFactory } from "@utils/css";
-import { classes } from "@utils/misc";
+import { classes, pluralize } from "@utils/misc";
 import definePlugin, { OptionType } from "@utils/types";
 import { Activity, ApplicationStream, Channel, Message, OnlineStatus, User } from "@vencord/discord-types";
 import { MessageFlags } from "@vencord/discord-types/enums";
-import { findByCodeLazy, findByPropsLazy, findComponentByCodeLazy, findCssClassesLazy, findExportedComponentLazy } from "@webpack";
+import { findByCodeLazy, findByPropsLazy, findComponentByCodeLazy, findCssClassesLazy } from "@webpack";
 import { ChannelStore, ExperimentStore, MessageStore, Parser, RelationshipStore, SnowflakeUtils, UserGuildSettingsStore, UserStore, useStateFromStores } from "@webpack/common";
 
 const cl = classNameFactory("vc-message-peek-");
@@ -27,7 +28,7 @@ const ActivityClasses = findCssClassesLazy("textWithIconContainer", "icon", "tru
 const MessageActions = findByPropsLazy("fetchMessages", "sendMessage");
 
 const hasRelevantActivity: (props: ActivityCheckProps) => boolean = findByCodeLazy(".OFFLINE||", ".INVISIBLE)return!1");
-const ActivityText: React.ComponentType<ActivityTextProps> = findComponentByCodeLazy("hasQuest:", "hideEmoji:");
+const ActivityText: React.ComponentType<ActivityTextProps> = findComponentByCodeLazy('"ActivityStatus"');
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
@@ -43,12 +44,12 @@ type AttachmentType = "image" | "gif" | "video" | "file";
 type IconType = AttachmentType | "voice" | "sticker";
 
 const Icons: Record<IconType, React.ComponentType<{ size: string; className: string; }>> = {
-    image: findExportedComponentLazy("ImageIcon"),
-    file: findExportedComponentLazy("AttachmentIcon"),
-    voice: findExportedComponentLazy("MicrophoneIcon"),
-    sticker: findExportedComponentLazy("StickerIcon"),
-    gif: findExportedComponentLazy("GifIcon"),
-    video: findExportedComponentLazy("VideoIcon"),
+    image: ImageIcon,
+    file: AttachmentIcon,
+    voice: Microphone,
+    sticker: StickerIcon,
+    gif: GifIcon,
+    video: VideoIcon,
 };
 
 const ATTACHMENT_LABELS: Record<AttachmentType, string> = {
@@ -112,10 +113,6 @@ function formatRelativeTime(timestamp: number): string {
     if (days > 0) return `${days}d`;
     if (hours > 0) return `${hours}h`;
     return `${Math.max(1, minutes)}m`;
-}
-
-function pluralize(count: number, singular: string, plural = singular + "s") {
-    return count === 1 ? `1 ${singular}` : `${count} ${plural}`;
 }
 
 function getMessageContent(message: Message): MessageContent | null {
@@ -224,7 +221,9 @@ function Timestamp({ channel }: { channel: Channel; }) {
     if (!lastMessage) return null;
 
     const timestamp = SnowflakeUtils.extractTimestamp(lastMessage.id);
-    const className = ExperimentStore.getUserExperimentBucket("2026-01-favorites-server") > 0 ? cl("timestamp-favorites") : cl("timestamp");
+    const isChannelPinned = UserGuildSettingsStore.isMessagesFavorite(channel?.id);
+    const isFavoritesEnabled = ExperimentStore.getUserExperimentBucket("2026-01-favorites-server") > 0;
+    const className = isFavoritesEnabled || isChannelPinned ? cl("timestamp-favorites") : cl("timestamp");
     return <span className={className}>{formatRelativeTime(timestamp)}</span>;
 }
 
@@ -239,23 +238,39 @@ function shouldShowActivity(lastMessage: Message | undefined, hasActivity: boole
 export default definePlugin({
     name: "MessagePeek",
     description: "Shows the last message preview and timestamp in the Direct Messages list.",
+    dependencies: ["MemberListDecoratorsAPI"],
+    tags: ["Appearance", "Chat"],
     authors: [Devs.prism, EquicordDevs.justjxke],
     settings,
     patches: [
         {
             find: "PrivateChannel.renderAvatar",
             replacement: {
-                match: /,subText:(\i)\.isSystemDM\(\).{0,500}:null,(?=name:)/,
+                match: /,subText:\i\.isSystemDM\(\).{0,700}:null,(?=name:)/,
                 replace: ",subText:$self.getSubText(arguments[0]),"
             }
         }
     ],
 
     async start() {
-        const channels = ChannelStore.getSortedPrivateChannels();
-        for (const channel of channels) {
-            if (!MessageStore.getLastMessage(channel.id)) {
-                await MessageActions.fetchMessages({ channelId: channel.id, limit: 1 });
+        const channels = ChannelStore.getSortedPrivateChannels()
+            .slice(0, 25)
+            .filter(c => !MessageStore.getLastMessage(c.id));
+
+        for (let i = 0; i < channels.length; i += 5) {
+            const batch = channels.slice(i, i + 5);
+
+            await Promise.allSettled(
+                batch.map(channel =>
+                    MessageActions.fetchMessages({
+                        channelId: channel.id,
+                        limit: 1
+                    })
+                )
+            );
+
+            if (i + 5 < channels.length) {
+                await new Promise(r => setTimeout(r, 3000));
             }
         }
     },

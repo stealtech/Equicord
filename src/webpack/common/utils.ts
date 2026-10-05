@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import type * as t from "@vencord/discord-types";
+import * as t from "@vencord/discord-types";
 import { _resolveReady, filters, findByCodeLazy, findByPropsLazy, findLazy, mapMangledModuleLazy, waitFor } from "@webpack";
 import type * as TSPattern from "ts-pattern";
 
@@ -46,11 +46,9 @@ export const Constants: t.Constants = mapMangledModuleLazy('ME:"/users/@me"', {
 export const RestAPI: t.RestAPI = findLazy(m => typeof m === "object" && m.del && m.put);
 export const moment: typeof import("moment") = findByPropsLazy("parseTwoDigitYear");
 
-export const hljs: typeof import("highlight.js").default = findByPropsLazy("highlight", "registerLanguage");
-
 export const useDrag = findByCodeLazy("useDrag::spec.begin was deprecated");
 // you cant make a better finder i love that they remove display names sm
-export const useDrop = findByCodeLazy(".options);return", ".collect,");
+export const useDrop = findByCodeLazy(".disconnectDropTarget()", ".dropTargetOptions=");
 
 export const { match, P }: { match: typeof TSPattern["match"], P: typeof TSPattern["P"]; } = mapMangledModuleLazy("@ts-pattern/matcher", {
     match: filters.byCode("return new"),
@@ -72,23 +70,6 @@ waitFor("parseTopic", m => Parser = m);
 export let Alerts: t.Alerts;
 waitFor(["show", "close"], m => Alerts = m);
 
-const ToastType = {
-    MESSAGE: "message",
-    SUCCESS: "success",
-    FAILURE: "failure",
-    CUSTOM: "custom",
-    CLIP: "clip",
-    LINK: "link",
-    FORWARD: "forward",
-    BOOKMARK: "bookmark",
-    CLOCK: "clock"
-};
-
-const ToastPosition = {
-    TOP: 0,
-    BOTTOM: 1
-};
-
 export interface ToastData {
     message: string,
     id: string,
@@ -108,32 +89,18 @@ export interface ToastOptions {
     duration?: number;
 }
 
-export const Toasts = {
-    Type: ToastType,
-    Position: ToastPosition,
-    // what's less likely than getting 0 from Math.random()? Getting it twice in a row
-    genId: () => (Math.random() || Math.random()).toString(36).slice(2),
-
-    // hack to merge with the following interface, dunno if there's a better way
-    ...{} as {
-        show(data: ToastData): void;
-        pop(): void;
-        create(message: string, type: string, options?: ToastOptions): ToastData;
-    }
-};
-
-// This is the same module but this is easier
-waitFor("showToast", m => {
-    Toasts.show = m.showToast;
-    Toasts.pop = m.popToast;
-    Toasts.create = m.createToast;
+export const Toasts: t.Toasts = mapMangledModuleLazy(".currentToastMap.has(", {
+    show: filters.byCode(".currentToastMap.has("),
+    pop: filters.byCode(".delete(")
 });
+
+export const createToast: t.createToast = findByCodeLazy('variant:"default",icon:', ".duration");
 
 /**
  * Show a simple toast. If you need more options, use Toasts.show manually
  */
-export function showToast(message: string, type = ToastType.MESSAGE, options?: ToastOptions) {
-    Toasts.show(Toasts.create(message, type, options));
+export function showToast(message: string, type: t.ToastType = "message", options?: ToastOptions) {
+    Toasts.show(createToast({ message, type, options }));
 }
 
 export const UserUtils = {
@@ -163,8 +130,9 @@ export const ChannelRouter: t.ChannelRouter = mapMangledModuleLazy('"Thread must
     transitionToThread: filters.byCode('"Thread must have a parent ID."')
 });
 
-export let SettingsRouter: any;
-waitFor(["openUserSettings", "USER_SETTINGS_MODAL_KEY"], m => SettingsRouter = m);
+export const SettingsRouter: t.SettingsRouter = mapMangledModuleLazy('type:"USER_SETTINGS_MODAL_OPEN"', {
+    openUserSettings: filters.byCode('type:"USER_SETTINGS_MODAL_OPEN"')
+});
 
 export const PermissionsBits: t.PermissionsBits = findLazy(m => typeof m.ADMINISTRATOR === "bigint");
 
@@ -178,7 +146,7 @@ export const { zustandPersist } = mapMangledModuleLazy(".onRehydrateStorage)?", 
 
 export const MessageActions = findByPropsLazy("editMessage", "sendMessage");
 export const MessageCache = findByPropsLazy("clearCache", "_channelMessages");
-export const UserProfileActions = findByPropsLazy("openUserProfileModal", "closeUserProfileModal");
+export const openUserProfileModal: t.OpenUserProfileModal = findByCodeLazy('type:"USER_PROFILE_MODAL_OPEN"');
 export const InviteActions = findByPropsLazy("resolveInvite");
 export const ChannelActionCreators = findByPropsLazy("openPrivateChannel");
 
@@ -192,7 +160,7 @@ export const IconUtils: t.IconUtils = findByPropsLazy("getGuildBannerURL", "getU
 
 export const ColorUtils = mapMangledModuleLazy("Invalid hex color format", {
     rgbToHex: filters.byCode(".toString(16).slice(1)"),
-    hexToRgba: filters.byCode("rgba(", "??"),
+    hexToRgba: filters.byCode("`rgba(${"),
     hexToRgb: filters.byCode(".rgb();return"),
     rgbToHsl: filters.byCode("saturation:", "lightness:"),
     mixColors: filters.byCode(".substring(1,3),16)"),
@@ -220,7 +188,7 @@ export const ExpressionPickerStore: t.ExpressionPickerStore = mapMangledModuleLa
     openExpressionPicker: filters.byCode(/setState\({activeView:(?:(?!null)\i),activeViewType:/),
     closeExpressionPicker: filters.byCode("setState({activeView:null"),
     toggleMultiExpressionPicker: filters.byCode(".EMOJI,"),
-    toggleExpressionPicker: filters.byCode(/getState\(\)\.activeView===\i\?\i\(\):\i\(/),
+    toggleExpressionPicker: filters.byCode(/\i\.activeView===\i&&\i\.activeViewType===\i&&/),
     setExpressionPickerView: filters.byCode(/setState\({activeView:\i,lastActiveView:/),
     setSearchQuery: filters.byCode("searchQuery:"),
     useExpressionPickerStore: filters.byCode(/\(\i,\i=\i\)=>/)

@@ -16,6 +16,7 @@ import { settings } from "./utils/settings";
 export default definePlugin({
     name: "ThemeLibrary",
     description: "A library of themes for Vencord.",
+    tags: ["Appearance", "Customisation"],
     authors: [EquicordDevs.Fafa],
     settings,
     toolboxActions: {
@@ -31,12 +32,9 @@ export default definePlugin({
             Component: require("./components/ThemeTab").default,
             Icon: ColorPaletteIcon
         });
-
-        SettingsPlugin.settingsSectionMap.push(["EquicordThemeLibrary", "equicord_theme_library"]);
     },
 
     stop() {
         removeFromArray(SettingsPlugin.customEntries, e => e.key === "equicord_theme_library");
-        removeFromArray(SettingsPlugin.settingsSectionMap, entry => entry[1] === "equicord_theme_library");
     },
 });

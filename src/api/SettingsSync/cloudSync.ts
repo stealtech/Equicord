@@ -20,16 +20,33 @@ import { ManifestEntry, SyncRequest, SyncResponse } from "./types";
 const logger = new Logger("SettingsSync:Cloud", "#39b7e0");
 
 const MANIFEST_STORE_KEY = "Vencord_cloudManifest";
-const API_VERSION_KEY = "Vencord_cloudApiVersion";
+const API_VERSION_STORE_KEY = "Vencord_cloudApiVersions";
 
 type ApiVersion = "v2" | "v1";
 
+const SYNC_DIRECTION_KEY = "Vencord_cloudSyncDirection";
+const SETTINGS_DIRTY_KEY = "Vencord_settingsDirty";
+export const getCloudSyncDirection = () => localStorage.getItem(SYNC_DIRECTION_KEY) || "both";
+export const setCloudSyncDirection = (direction: "push" | "pull" | "both" | "manual") => localStorage.setItem(SYNC_DIRECTION_KEY, direction);
+export const areLocalSettingsDirty = () => localStorage.getItem(SETTINGS_DIRTY_KEY) === "true";
+export const markLocalSettingsDirty = () => localStorage.setItem(SETTINGS_DIRTY_KEY, "true");
+export const markLocalSettingsClean = () => localStorage.removeItem(SETTINGS_DIRTY_KEY);
+
+async function loadApiVersionMap(): Promise<Record<string, ApiVersion>> {
+    return await DataStore.get<Record<string, ApiVersion>>(API_VERSION_STORE_KEY) ?? {};
+}
+
 async function getApiVersion(): Promise<ApiVersion> {
-    return await DataStore.get<ApiVersion>(API_VERSION_KEY) ?? "v2";
+    const map = await loadApiVersionMap();
+    return map[getCloudUrl().origin] ?? "v2";
 }
 
 async function setApiVersion(version: ApiVersion) {
-    await DataStore.set(API_VERSION_KEY, version);
+    await DataStore.update<Record<string, ApiVersion>>(API_VERSION_STORE_KEY, map => {
+        map ??= {};
+        map[getCloudUrl().origin] = version;
+        return map;
+    });
 }
 
 function toBase64(data: Uint8Array): string {
@@ -70,6 +87,9 @@ async function buildLocalData(): Promise<Map<string, Uint8Array>> {
     const quickCss = await VencordNative.quickCss.get();
     if (quickCss) data.set("quickCss", encoder.encode(quickCss));
 
+    const dataStoreEntries = await DataStore.entries();
+    if (dataStoreEntries) data.set("dataStore", encoder.encode(JSON.stringify(dataStoreEntries)));
+
     return data;
 }
 
@@ -92,10 +112,19 @@ async function applyDownloads(downloads: SyncResponse["downloads"]) {
         } else if (dl.key === "quickCss") {
             await VencordNative.quickCss.set(text);
             settingsChanged = true;
+        } else if (dl.key === "dataStore") {
+            try {
+                const entries = JSON.parse(text);
+                await DataStore.setMany(entries);
+                settingsChanged = true;
+            } catch (e) {
+                logger.error("Failed to apply dataStore download", e);
+            }
         } else if (dl.key.startsWith("dataStore/")) {
             const dsKey = dl.key.slice("dataStore/".length);
             try {
                 await DataStore.set(dsKey, JSON.parse(text));
+                settingsChanged = true;
             } catch (e) {
                 logger.error(`Failed to apply dataStore download for ${dsKey}`, e);
             }
@@ -126,9 +155,8 @@ async function doSyncV2(uploads: SyncRequest["uploads"], clientManifest: Manifes
             },
             body: JSON.stringify({ client_manifest: clientManifest, uploads } satisfies SyncRequest),
         });
-    } catch {
-        logger.info("Server does not support v2, falling back to v1");
-        await setApiVersion("v1");
+    } catch (e) {
+        logger.error("v2 sync network error, will retry next sync", e);
         return null;
     }
 
@@ -265,7 +293,7 @@ async function deleteV2() {
         return;
     }
 
-    const { entries }: { entries: ManifestEntry[] } = await manifestRes.json();
+    const { entries }: { entries: ManifestEntry[]; } = await manifestRes.json();
 
     await Promise.all(entries.map(async entry => {
         const res = await fetch(new URL(`/v2/data/${encodeURIComponent(entry.key)}`, getCloudUrl()), {

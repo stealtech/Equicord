@@ -12,7 +12,6 @@ import definePlugin from "@utils/types";
 
 import { useAuthorizationStore } from "./lib/stores/AuthorizationStore";
 import { useSongStore } from "./lib/stores/SongStore";
-import { Native } from "./service";
 import settings from "./settings";
 import ProfileSongs from "./ui/songs/ProfileSongs";
 import WidgetSongs from "./ui/songs/WidgetSongs";
@@ -20,39 +19,17 @@ import WidgetSongs from "./ui/songs/WidgetSongs";
 export default definePlugin({
     name: "SongSpotlight",
     description: "Show off songs on your profile",
+    dependencies: ["ProfileCollectionsAPI"],
+    tags: ["Appearance", "Media"],
     authors: [EquicordDevs.nexpid],
     settings,
     patches: [
-        // Personal profile popout
-        {
-            find: ".WIDGETS_USER_PROFILE_ACCOUNT_POPOUT_NEW_BADGE]",
-            replacement: {
-                match: /user:(\i),bio:.{0,60}}\)/,
-                replace: "$&,$self.renderProfileSongs({userId:$1.id})",
-            },
-        },
-        // Message user popout
-        {
-            find: ".isProvisional?(",
-            replacement: {
-                match: /user:(\i),bio:.{0,60}}\)/,
-                replace: "$&,$self.renderProfileSongs({userId:$1.id})",
-            },
-        },
-        // DM sidebar profile
-        {
-            find: ".SIDEBAR}),nicknameIcons:",
-            replacement: {
-                match: /{userId:(\i)\.id}\)}\).{0,100}]}\)(?=\]\}\))/,
-                replace: "$&,$self.renderProfileSongs({userId:$1.id,isSidebar:true})",
-            },
-        },
         // Full profile modal sections (lazy loaded)
         {
             find: ".MUTUAL_GUILDS})),",
             replacement: {
-                match: /(\i).push\({text.{0,50}}\);/,
-                replace: '$&$1.push({text:"Song Spotlight",section:"SONG_SPOTLIGHT"});',
+                match: /(\i).push\({text.{0,50}.ACTIVITY\}\),/,
+                replace: '$&$1.push({text:"Song Spotlight",section:"SONG_SPOTLIGHT"}),',
             },
         },
         {
@@ -70,16 +47,13 @@ export default definePlugin({
         },
     },
     start() {
-        // the cache lives in native.ts so it persists between reloads and
-        // only gets cleared on full restart. we don't want that since
-        // audio preview URLs expire very fast, so we just clear it on
-        // plugin restart instead
-        Native.clearCache();
-
         useSongStore.getState().$refresh();
         useAuthorizationStore.persist.rehydrate();
     },
 
-    renderProfileSongs: ErrorBoundary.wrap(ProfileSongs, { noop: true }),
+    renderProfileCollection: {
+        render: ProfileSongs,
+        priority: 0,
+    },
     renderWidgetSongs: ErrorBoundary.wrap(WidgetSongs, { noop: true }),
 });

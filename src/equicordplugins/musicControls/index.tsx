@@ -27,15 +27,17 @@ import { migrateOldLyrics } from "./spotify/lyrics/api";
 import { SpotifyLyrics } from "./spotify/lyrics/components/lyrics";
 import { SpotifyPlayer } from "./spotify/PlayerComponent";
 import { TidalLyrics } from "./tidal/lyrics/components/lyrics";
+import { stopTidalLrcStore } from "./tidal/lyrics/providers/store";
 import { TidalPlayer } from "./tidal/TidalPlayer";
-import { YtmPlayer } from "./youtubeMusic/PlayerComponent";
+import { stopTidalStore } from "./tidal/TidalStore";
 
 export default definePlugin({
     name: "MusicControls",
     description: "Music Controls and Lyrics for multiple services ",
     authors: [Devs.Ven, Devs.afn, Devs.KraXen72, Devs.Av32000, Devs.nin0dev, Devs.thororen, EquicordDevs.vmohammad, Devs.Joona],
     settings,
-    tags: [
+    tags: ["Media", "Activity"],
+    searchTerms: [
         // Spotify
         "Spotify",
         "SpotifyControls",
@@ -44,15 +46,11 @@ export default definePlugin({
         "Tidal",
         "TidalControls",
         "TidalLyrics",
-        // Youtube
-        "Youtube",
-        "YoutubeMusic",
-        "YoutubeMusicControls"
     ],
 
     patches: [
         {
-            find: ".DISPLAY_NAME_STYLES_COACHMARK),",
+            find: "#{intl::USER_PROFILE_ACCOUNT_POPOUT_BUTTON_A11Y_LABEL}",
             replacement: {
                 // react.jsx)(AccountPanel, { ..., showTaglessAccountPanel: blah })
                 match: /(?<=\i\.jsxs?\)\()(\i),{(?=[^}]*?userTag:\i,occluded:)/,
@@ -91,7 +89,7 @@ export default definePlugin({
     ],
 
     PanelWrapper({ VencordOriginal, ...props }) {
-        const { showTidalControls, showTidalLyrics, showSpotifyLyrics, showSpotifyControls, LyricsPosition, showYoutubeMusicControls } = settings.store;
+        const { showTidalControls, showTidalLyrics, showSpotifyLyrics, showSpotifyControls, lyricsPosition } = settings.store;
         return (
             <>
                 <ErrorBoundary
@@ -102,13 +100,12 @@ export default definePlugin({
                         </div>
                     )}
                 >
-                    {showTidalLyrics && LyricsPosition === "above" && <TidalLyrics />}
+                    {showTidalLyrics && lyricsPosition === "above" && <TidalLyrics />}
                     {showTidalControls && <TidalPlayer />}
-                    {showTidalLyrics && LyricsPosition === "below" && <TidalLyrics />}
-                    {showSpotifyLyrics && LyricsPosition === "above" && <SpotifyLyrics />}
+                    {showTidalLyrics && lyricsPosition === "below" && <TidalLyrics />}
+                    {showSpotifyLyrics && lyricsPosition === "above" && <SpotifyLyrics />}
                     {showSpotifyControls && <SpotifyPlayer />}
-                    {showSpotifyLyrics && LyricsPosition === "below" && <SpotifyLyrics />}
-                    {showYoutubeMusicControls && <YtmPlayer />}
+                    {showSpotifyLyrics && lyricsPosition === "below" && <SpotifyLyrics />}
                 </ErrorBoundary>
 
                 <VencordOriginal {...props} />
@@ -119,5 +116,10 @@ export default definePlugin({
     async start() {
         await migrateOldLyrics();
         toggleHoverControls(settings.store.hoverControls);
+    },
+
+    stop() {
+        stopTidalLrcStore();
+        stopTidalStore();
     },
 });

@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { isPluginEnabled } from "@api/PluginManager";
-import betterGifPicker from "@plugins/betterGifPicker";
 import { Devs } from "@utils/constants";
 import { insertTextIntoChatInputBox } from "@utils/discord";
 import definePlugin from "@utils/types";
@@ -26,23 +24,21 @@ import { ExpressionPickerStore } from "@webpack/common";
 export default definePlugin({
     name: "GifPaste",
     description: "Makes picking a gif in the gif picker insert a link into the chatbox instead of instantly sending it",
+    tags: ["Media", "Chat"],
     authors: [Devs.Ven],
 
     patches: [{
         find: "handleSelectGIF=",
         replacement: {
-            match: /handleSelectGIF=(\i)=>\{/,
-            replace: "$&if (!this.props.className) return $self.handleSelect($1);"
+            match: /handleSelectGIF=\((\i),\i\)=>\{/,
+            replace: "$&if (!this?.props?.className) return $self.handleSelect($1);"
         }
     }],
 
     handleSelect(gif?: { url: string; }) {
         if (gif) {
             insertTextIntoChatInputBox(gif.url + " ");
-
-            if (!(isPluginEnabled(betterGifPicker.name) && betterGifPicker.settings.store.keepOpen)) {
-                ExpressionPickerStore.closeExpressionPicker();
-            }
+            ExpressionPickerStore.closeExpressionPicker();
         }
     }
 });

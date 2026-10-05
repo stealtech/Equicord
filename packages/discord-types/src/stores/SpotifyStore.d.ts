@@ -32,6 +32,7 @@ export interface SpotifySocketAndDevice {
 export interface SpotifyArtist {
     id: string;
     name: string;
+    external_urls: { spotify: string; };
 }
 
 export interface SpotifyImage {
@@ -60,7 +61,7 @@ export interface SpotifyTrack {
 export interface SpotifyPlayerState {
     track: SpotifyTrack;
     startTime: number;
-    context: { uri: string } | null;
+    context: { uri: string; } | null;
 }
 
 export interface SpotifyActivity {

@@ -5,14 +5,15 @@
  */
 
 import { showNotice } from "@api/Notices";
-import { isPluginEnabled, pluginRequiresRestart, startDependenciesRecursive, startPlugin, stopPlugin } from "@api/PluginManager";
+import { hasAnyVisibleSettings, isPluginEnabled, pluginRequiresRestart, startDependenciesRecursive, startPlugin, stopPlugin } from "@api/PluginManager";
+import { Settings } from "@api/Settings";
 import { CogWheel, InfoIcon } from "@components/Icons";
 import { AddonCard } from "@components/settings/AddonCard";
 import { classNameFactory } from "@utils/css";
 import { Logger } from "@utils/Logger";
-import { OptionType, Plugin } from "@utils/types";
-import { React, showToast, Toasts } from "@webpack/common";
-import { Settings } from "Vencord";
+import { Plugin } from "@utils/types";
+import { ToastPosition } from "@vencord/discord-types/enums";
+import { React, showToast } from "@webpack/common";
 
 import { PluginMeta } from "~plugins";
 
@@ -79,9 +80,7 @@ export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, on
             settings.enabled = false;
 
             const msg = `Error while ${wasEnabled ? "stopping" : "starting"} plugin ${plugin.name}`;
-            showToast(msg, Toasts.Type.FAILURE, {
-                position: Toasts.Position.BOTTOM,
-            });
+            showToast(msg, "failure", { position: ToastPosition.BOTTOM });
 
             return;
         }
@@ -146,7 +145,7 @@ export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, on
                     onClick={() => openPluginModal(plugin, onRestartNeeded)}
                     className={cl("info-button")}
                 >
-                    {plugin.settings?.def && Object.values(plugin.settings.def).some(s => s.type !== OptionType.CUSTOM && !s.hidden)
+                    {hasAnyVisibleSettings(plugin)
                         ? <CogWheel className={cl("info-icon")} />
                         : <InfoIcon className={cl("info-icon")} />
                     }

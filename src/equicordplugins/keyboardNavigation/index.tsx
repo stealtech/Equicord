@@ -7,9 +7,8 @@
 import { definePluginSettings } from "@api/Settings";
 import { Devs } from "@utils/constants";
 import { classNameFactory } from "@utils/css";
-import { closeAllModals } from "@utils/modal";
 import definePlugin, { OptionType } from "@utils/types";
-import { SettingsRouter, useState } from "@webpack/common";
+import { closeAllModals,SettingsRouter, useState } from "@webpack/common";
 
 import { registerAction } from "./commands";
 import { openCommandPalette } from "./components/CommandPalette";
@@ -87,6 +86,7 @@ export const settings = definePluginSettings({
 export default definePlugin({
     name: "KeyboardNavigation",
     description: "Allows you to navigate the UI with a keyboard.",
+    tags: ["Accessibility", "Shortcuts"],
     authors: [Devs.Ethan],
     settings,
 

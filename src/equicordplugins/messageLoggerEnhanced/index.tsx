@@ -8,6 +8,7 @@ export const Native = getNative();
 
 import "./styles.css";
 
+import { LogsIcon } from "@components/Icons";
 import { Devs, EquicordDevs } from "@utils/constants";
 import { classNameFactory } from "@utils/css";
 import { Logger } from "@utils/Logger";
@@ -15,11 +16,11 @@ import definePlugin from "@utils/types";
 import { findByPropsLazy } from "@webpack";
 import { FluxDispatcher, MessageStore, SelectedChannelStore, UserStore } from "@webpack/common";
 
-import { LogsIcon, OpenLogsButton } from "./components/LogsButton";
+import { OpenLogsButton } from "./components/LogsButton";
 import { openLogModal } from "./components/LogsModal";
 import * as idb from "./db";
-import { addMessage } from "./LoggedMessageManager";
 import * as LoggedMessageManager from "./LoggedMessageManager";
+import { addMessage } from "./LoggedMessageManager";
 import { settings } from "./settings";
 import { FetchMessagesResponse, LoadMessagePayload, LoggedMessage, LoggedMessageJSON, MessageCreatePayload, MessageDeleteBulkPayload, MessageDeletePayload, MessageUpdatePayload } from "./types";
 import { cleanUpCachedMessage, cleanupUserObject, getNative, isGhostPinged, mapTimestamp, messageJsonToMessageClass, reAddDeletedMessages } from "./utils";
@@ -36,18 +37,20 @@ export const Flogger = new Logger("MessageLoggerEnhanced", "#f26c6c");
 export const cacheSentMessages = new LimitedMap<string, LoggedMessageJSON>();
 export const cl = classNameFactory("vc-msg-logger-enhanced-");
 
+let didClearLogsOnStartup = false;
+
 const cacheThing = findByPropsLazy("commit", "getOrCreate");
+
+export async function clearLogs(toast = true) {
+    await idb.clearMessagesIDB(toast);
+    cacheSentMessages.clear();
+}
 
 let oldGetMessage: typeof MessageStore.getMessage;
 
 const handledMessageIds = new Set();
 async function messageDeleteHandler(payload: MessageDeletePayload & { isBulk: boolean; }) {
-    if (payload.mlDeleted) {
-        if (settings.store.permanentlyRemoveLogByDefault)
-            await idb.deleteMessageIDB(payload.id);
-
-        return;
-    }
+    if (payload.mlDeleted) return;
 
     if (handledMessageIds.has(payload.id)) {
         return;
@@ -251,7 +254,8 @@ export default definePlugin({
     name: "MessageLoggerEnhanced",
     authors: [Devs.Aria, EquicordDevs.keircn],
     description: "Improves MessageLogger with edited message history, ghost ping detection and more",
-    dependencies: ["MessageLogger"],
+    tags: ["Chat", "Servers"],
+    dependencies: ["MessageLogger", "HeaderBarAPI"],
 
     patches: [
         {
@@ -273,14 +277,6 @@ export default definePlugin({
             replacement: {
                 match: /deleted:\i\.deleted, editHistory:\i\.editHistory,/,
                 replace: "deleted:$self.getDeleted(...arguments), editHistory:$self.getEdited(...arguments),"
-            }
-        },
-        // MessagePreview component in LogsModal
-        {
-            find: "=!0,disableInteraction:",
-            replacement: {
-                match: /childrenHeader:.{0,100}childrenMessageContent/,
-                replace: "childrenAccessories:arguments[0].childrenAccessories || null,$&"
             }
         },
         // fix vidoes failing because there are no thumbnails
@@ -305,7 +301,7 @@ export default definePlugin({
 
         // only check for expired attachments if the message is not deleted
         {
-            find: "\"/ephemeral-attachments/\"",
+            find: ".ATTACHMENTS_REFRESH_URLS,",
             replacement: {
                 match: /\i\.attachments\.some\(\i\)\|\|\i\.embeds\.some/,
                 replace: "!arguments[0].deleted && $&"
@@ -359,10 +355,7 @@ export default definePlugin({
     },
 
     getEdited(m1, m2) {
-        const editHistory = m2?.editHistory;
-        if (editHistory == null && m1?.editHistory != null && m1.editHistory.length > 0)
-            return m1.editHistory.map(mapTimestamp);
-        return editHistory;
+        return m2?.editHistory ?? m1?.editHistory?.map(mapTimestamp) ?? [];
     },
 
     flux: {
@@ -396,9 +389,19 @@ export default definePlugin({
 
         Native.init();
 
-        const { imageCacheDir, logsDir } = await Native.getSettings();
+        if (settings.store.clearLogsOnRestart && !didClearLogsOnStartup) {
+            try {
+                await clearLogs(false);
+                didClearLogsOnStartup = true;
+            } catch (e) {
+                Flogger.error("Failed to clear logs on restart", e);
+            }
+        }
+
+        const { imageCacheDir, logsDir, attachmentFileExtensions } = await Native.getSettings();
         settings.store.imageCacheDir = imageCacheDir;
         settings.store.logsDir = logsDir;
+        settings.store.attachmentFileExtensions = attachmentFileExtensions ?? "none";
 
         setupContextMenuPatches();
     },

@@ -10,9 +10,9 @@ import * as DataStore from "@api/DataStore";
 import { definePluginSettings } from "@api/Settings";
 import { EquicordDevs, IS_MAC } from "@utils/constants";
 import { classNameFactory } from "@utils/css";
-import { closeModal, openModal } from "@utils/modal";
 import definePlugin, { makeRange, OptionType } from "@utils/types";
-import { Button, ChannelRouter, ChannelStore, IconUtils, React, RelationshipStore, SelectedChannelStore, Toasts, UserStore } from "@webpack/common";
+import { ToastPosition } from "@vencord/discord-types/enums";
+import { Button, ChannelRouter, ChannelStore, closeModal, IconUtils, openModal, React, RelationshipStore, SelectedChannelStore, showToast,UserStore } from "@webpack/common";
 
 const STORAGE_KEY = "RDMSwitch_history";
 
@@ -77,7 +77,7 @@ const settings = definePluginSettings({
                     cycleSnapshot = [];
                     cycleIndex = -1;
                     await DataStore.set(STORAGE_KEY, []);
-                    Toasts.show({ id: Toasts.genId(), type: Toasts.Type.SUCCESS, message: "Cleared RDMS history" });
+                    showToast("Cleared RDMS history", "success");
                 }}>
                 "Clear RDMS History
             </Button>
@@ -85,7 +85,6 @@ const settings = definePluginSettings({
     }
 });
 
-let activeToastId: string | null = null;
 let overlayModalKey: string | null = null;
 let overlayRerender: (() => void) | null = null;
 
@@ -165,7 +164,6 @@ function endCycleSession() {
 
     cycleSnapshot = [];
     cycleIndex = -1;
-    activeToastId = null;
 
     const visEnd = (settings as any).store?.visualStyle;
     if (visEnd === "overlay") unmountOverlay();
@@ -320,18 +318,13 @@ function showCycleToast() {
     const id = cycleSnapshot[cycleIndex];
     if (!id) return;
     const { name } = getDisplayForChannel(id);
-    if (!activeToastId) activeToastId = Toasts.genId();
-    Toasts.show({
-        id: activeToastId,
-        message: `Switching to: ${name}`,
-        type: Toasts.Type.MESSAGE,
-        options: { position: Toasts.Position.BOTTOM, duration: settings.store.toastDurationMs }
-    });
+    showToast(`Switching to: ${name}`, "message", { position: ToastPosition.BOTTOM, duration: settings.store.toastDurationMs });
 }
 
 export default definePlugin({
     name: "RecentDMSwitcher",
     description: "Ctrl+Tab between most recently used DMs (Ctrl+Shift+Tab reverse)",
+    tags: ["Chat", "Utility"],
     authors: [EquicordDevs.mmeta],
     settings,
 
@@ -369,7 +362,6 @@ export default definePlugin({
         suppressRdmsWhileCycling = false;
         cycleSnapshot = [];
         cycleIndex = -1;
-        activeToastId = null;
 
         const visEnd = (settings as any).store?.visualStyle;
         if (visEnd === "overlay") unmountOverlay();

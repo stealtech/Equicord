@@ -125,6 +125,7 @@ const settings = definePluginSettings({
 export default definePlugin({
     name: "CustomTimestamps",
     description: "Custom timestamps on messages and tooltips",
+    tags: ["Appearance", "Customisation"],
     authors: [Devs.Rini, EquicordDevs.nvhhr, EquicordDevs.Suffocate, Devs.Obsidian],
     settings,
     settingsAboutComponent: () => (
@@ -163,7 +164,7 @@ export default definePlugin({
             ]
         },
         {
-            find: /.full,.{0,15}children:/,
+            find: ".MINUTE],[45*",
             replacement: {
                 // Tooltips for timestamp markdown (e.g. <t:1234567890>)
                 match: /(__unsupportedReactNodeAsText:)\i.full/,

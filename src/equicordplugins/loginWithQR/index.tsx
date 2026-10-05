@@ -42,6 +42,7 @@ const settings = definePluginSettings({
 export default definePlugin({
     name: "LoginWithQR",
     description: "Allows you to login to another device by scanning a login QR code, just like on mobile!",
+    tags: ["Utility"],
     authors: [EquicordDevs.nexpid],
 
     settings,
@@ -51,7 +52,7 @@ export default definePlugin({
         {
             find: ".clipboardData&&(",
             replacement: {
-                match: /handleGlobalPaste:(\i)/,
+                match: /handleGlobalPaste:(\i)(?=\}\))/,
                 replace: "handleGlobalPaste:(...args)=>!$self.qrModalOpen&&$1(...args)",
             },
         },
@@ -66,13 +67,11 @@ export default definePlugin({
             Component: openQrModal,
             Icon: QrCodeIcon
         });
-        SettingsPlugin.settingsSectionMap.push(["EquicordLoginWithQR", "equicord_login_with_qr"]);
         preload();
     },
 
     stop() {
         removeFromArray(SettingsPlugin.customEntries, e => e.key === "equicord_login_with_qr");
-        removeFromArray(SettingsPlugin.settingsSectionMap, entry => entry[1] === "equicord_login_with_qr");
         unload();
     },
 });

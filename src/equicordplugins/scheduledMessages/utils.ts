@@ -8,7 +8,7 @@ import * as DataStore from "@api/DataStore";
 import { Logger } from "@utils/Logger";
 import { Message } from "@vencord/discord-types";
 import { CloudUploadPlatform } from "@vencord/discord-types/enums";
-import { ChannelStore, CloudUploader, Constants, FluxDispatcher, GuildStore, IconUtils, MessageActions, MessageStore, RestAPI, showToast, SnowflakeUtils, Toasts, UserStore } from "@webpack/common";
+import { ChannelStore, CloudUploader, Constants, FluxDispatcher, GuildStore, IconUtils, MessageActions, MessageStore, RestAPI, showToast, SnowflakeUtils, UserStore } from "@webpack/common";
 
 import { settings } from ".";
 import { PhantomMessageData, ScheduledAttachment, ScheduledMessage, ScheduledReaction } from "./types";
@@ -40,6 +40,12 @@ async function saveScheduledMessages(): Promise<void> {
 
 export function getScheduledMessages(): ScheduledMessage[] {
     return [...scheduledMessages];
+}
+
+export function getScheduledMessagesForChannel(channelId?: string): ScheduledMessage[] {
+    const messages = getScheduledMessages();
+    if (!channelId) return messages;
+    return messages.filter(message => message.channelId === channelId);
 }
 
 export function getChannelDisplayInfo(channelId: string): { name: string; avatar: string; } {
@@ -368,11 +374,11 @@ async function sendScheduledMessage(msg: ScheduledMessage): Promise<boolean> {
         }
 
         if (settings.store.showNotifications) {
-            showToast(`Scheduled message sent to ${getChannelDisplayInfo(msg.channelId).name}`, Toasts.Type.SUCCESS);
+            showToast(`Scheduled message sent to ${getChannelDisplayInfo(msg.channelId).name}`, "success");
         }
         return true;
     } catch {
-        if (settings.store.showNotifications) showToast("Failed to send scheduled message", Toasts.Type.FAILURE);
+        if (settings.store.showNotifications) showToast("Failed to send scheduled message", "failure");
         return false;
     }
 }
@@ -405,6 +411,51 @@ export async function addScheduledMessage(
     scheduledMessages.sort((a, b) => a.scheduledTime - b.scheduledTime);
     await saveScheduledMessages();
     createPhantomMessage(newMessage);
+
+    return { success: true };
+}
+
+export async function updateScheduledMessageTime(id: string, scheduledTime: number): Promise<{ success: boolean; error?: string; }> {
+    const message = scheduledMessages.find(entry => entry.id === id);
+    if (!message) {
+        return { success: false, error: "Scheduled message not found" };
+    }
+
+    if (scheduledTime <= Date.now()) {
+        return { success: false, error: "Please select a future date and time" };
+    }
+
+    const minuteStart = Math.floor(scheduledTime / 60000) * 60000;
+    const count = scheduledMessages.filter(entry =>
+        entry.id !== id
+        && entry.channelId === message.channelId
+        && entry.scheduledTime >= minuteStart
+        && entry.scheduledTime < minuteStart + 60000
+    ).length;
+
+    if (count >= settings.store.maxMessagesPerMinute) {
+        return { success: false, error: `Maximum of ${settings.store.maxMessagesPerMinute} messages per channel per minute reached` };
+    }
+
+    removePhantomMessage(message);
+    message.scheduledTime = scheduledTime;
+    scheduledMessages.sort((left, right) => left.scheduledTime - right.scheduledTime);
+    await saveScheduledMessages();
+    await createPhantomMessage(message);
+    return { success: true };
+}
+
+export async function sendScheduledMessageNow(id: string): Promise<{ success: boolean; error?: string; }> {
+    const message = scheduledMessages.find(entry => entry.id === id);
+    if (!message) {
+        return { success: false, error: "Scheduled message not found" };
+    }
+
+    await removeScheduledMessage(id);
+    const sent = await sendScheduledMessage(message);
+    if (!sent) {
+        return { success: false, error: "Failed to send scheduled message" };
+    }
 
     return { success: true };
 }

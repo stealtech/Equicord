@@ -20,13 +20,14 @@ import "./fixDiscordBadgePadding.css";
 
 import { _getBadges, BadgePosition, BadgeUserArgs, ProfileBadge } from "@api/Badges";
 import ErrorBoundary from "@components/ErrorBoundary";
+import { CopyIcon, LinkIcon } from "@components/Icons";
 import { openContributorModal } from "@components/settings/tabs";
 import { Devs } from "@utils/constants";
 import { copyWithToast } from "@utils/discord";
 import { Logger } from "@utils/Logger";
 import { shouldShowContributorBadge, shouldShowEquicordContributorBadge } from "@utils/misc";
 import definePlugin from "@utils/types";
-import { ContextMenuApi, Menu, Toasts, UserStore } from "@webpack/common";
+import { ContextMenuApi, Menu, showToast, UserStore } from "@webpack/common";
 
 import Plugins, { PluginMeta } from "~plugins";
 
@@ -37,6 +38,7 @@ const EQUICORD_CONTRIBUTOR_BADGE = "https://equicord.org/assets/favicon.png";
 const USERPLUGIN_CONTRIBUTOR_BADGE = "https://equicord.org/assets/icons/misc/userplugin.png";
 
 const ContributorBadge: ProfileBadge = {
+    id: "vencord_contributor_badge",
     description: "Vencord Contributor",
     iconSrc: CONTRIBUTOR_BADGE,
     position: BadgePosition.START,
@@ -45,6 +47,7 @@ const ContributorBadge: ProfileBadge = {
 };
 
 const EquicordContributorBadge: ProfileBadge = {
+    id: "equicord_contributor_badge",
     description: "Equicord Contributor",
     iconSrc: EQUICORD_CONTRIBUTOR_BADGE,
     position: BadgePosition.START,
@@ -59,6 +62,7 @@ const EquicordContributorBadge: ProfileBadge = {
 };
 
 const UserPluginContributorBadge: ProfileBadge = {
+    id: "user_plugin_contributor_badge",
     description: "User Plugin Contributor",
     iconSrc: USERPLUGIN_CONTRIBUTOR_BADGE,
     position: BadgePosition.START,
@@ -99,7 +103,7 @@ async function loadAllBadges(noCache = false) {
 
 let intervalId: any;
 
-export function BadgeContextMenu({ badge }: { badge: ProfileBadge & BadgeUserArgs; }) {
+export function BadgeContextMenu({ badge }: { badge: Omit<ProfileBadge, "id"> & BadgeUserArgs; }) {
     return (
         <Menu.Menu
             navId="vc-badge-context"
@@ -111,6 +115,7 @@ export function BadgeContextMenu({ badge }: { badge: ProfileBadge & BadgeUserArg
                     id="vc-badge-copy-name"
                     label="Copy Badge Name"
                     action={() => copyWithToast(badge.description!)}
+                    leadingAccessory={{ type: "icon", icon: CopyIcon }}
                 />
             )}
             {badge.iconSrc && (
@@ -118,6 +123,7 @@ export function BadgeContextMenu({ badge }: { badge: ProfileBadge & BadgeUserArg
                     id="vc-badge-copy-link"
                     label="Copy Badge Image Link"
                     action={() => copyWithToast(badge.iconSrc!)}
+                    leadingAccessory={{ type: "icon", icon: LinkIcon }}
                 />
             )}
         </Menu.Menu>
@@ -137,9 +143,15 @@ export default definePlugin({
                     match: /alt:" ","aria-hidden":!0,src:.{0,50}(\i).iconSrc/,
                     replace: "...$1.props,$&"
                 },
+                // Path with 2026-04-badge-discovery OFF
                 {
-                    match: /(?<=forceOpen:.{0,40}?\i\((\i)\.id\).{0,100}?)children:/,
-                    replace: "children:$1.component?$self.renderBadgeComponent({...$1}) :"
+                    match: /(?<=forceOpen:.{0,40}?ariaHidden:!0,)children:(?=.{0,50}?(\i)\.id)/,
+                    replace: "children:$1.component?$self.renderBadgeComponent({...$1}):"
+                },
+                // Path with 2026-04-badge-discovery ON
+                {
+                    match: /(?<=fallbackIconSrc:.{0,50}?)children:(?=.{0,50}?(\i)\.id)/,
+                    replace: "children:$1.component?$self.renderBadgeComponent({...$1}):"
                 },
                 // handle onClick and onContextMenu
                 {
@@ -169,11 +181,7 @@ export default definePlugin({
     toolboxActions: {
         async "Refetch Badges"() {
             await loadAllBadges(true);
-            Toasts.show({
-                id: Toasts.genId(),
-                message: "Successfully refetched badges!",
-                type: Toasts.Type.SUCCESS
-            });
+            showToast("Successfully refetched badges!", "success");
         }
     },
 
@@ -219,7 +227,8 @@ export default definePlugin({
     },
 
     getDonorBadges(userId: string) {
-        return DonorBadges[userId]?.map(badge => ({
+        return DonorBadges[userId]?.map((badge, idx) => ({
+            id: `vencord_donor_badge_${idx}`,
             iconSrc: badge.badge,
             description: badge.tooltip,
             position: BadgePosition.START,
@@ -239,7 +248,8 @@ export default definePlugin({
     },
 
     getEquicordDonorBadges(userId: string) {
-        return EquicordDonorBadges[userId]?.map(badge => ({
+        return EquicordDonorBadges[userId]?.map((badge, idx) => ({
+            id: `equicord_donor_badge_${idx}`,
             iconSrc: badge.badge,
             description: badge.tooltip,
             position: BadgePosition.START,

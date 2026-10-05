@@ -19,8 +19,9 @@ import { SettingsAbout } from "./components/Modals";
 export default definePlugin({
     name: "IconViewer",
     description: "Adds a new tab to settings to preview all icons.",
+    tags: ["Developers"],
     authors: [EquicordDevs.iamme],
-    dependencies: ["Settings"],
+    dependencies: ["Settings", "ConcatenatedModules"],
     startAt: StartAt.WebpackReady,
     toolboxActions: {
         "Open Icons Tab"() {
@@ -35,11 +36,8 @@ export default definePlugin({
             Component: IconsTab,
             Icon: MagnifyingGlassIcon
         });
-
-        SettingsPlugin.settingsSectionMap.push(["EquicordDiscordIcons", "equicord_icon_viewer"]);
     },
     stop() {
         removeFromArray(SettingsPlugin.customEntries, e => e.key === "equicord_icon_viewer");
-        removeFromArray(SettingsPlugin.settingsSectionMap, entry => entry[1] === "equicord_icon_viewer");
     },
 });

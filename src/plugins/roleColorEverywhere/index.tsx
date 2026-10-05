@@ -16,9 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { definePluginSettings, Settings } from "@api/Settings";
-import ErrorBoundary from "@components/ErrorBoundary";
-import { getCustomColorString } from "@equicordplugins/customUserColors";
+import { isPluginEnabled } from "@api/PluginManager";
+import { definePluginSettings } from "@api/Settings";
+import customUserColors, { getCustomColorString } from "@equicordplugins/customUserColors";
 import { Devs } from "@utils/constants";
 import { Logger } from "@utils/Logger";
 import definePlugin, { makeRange, OptionType } from "@utils/types";
@@ -76,6 +76,7 @@ export default definePlugin({
     name: "RoleColorEverywhere",
     authors: [Devs.KingFish, Devs.lewisakura, Devs.AutumnVN, Devs.Kyuuhachi, Devs.jamesbt365],
     description: "Adds the top role color anywhere possible",
+    tags: ["Roles", "Appearance"],
     settings,
 
     patches: [
@@ -102,23 +103,24 @@ export default definePlugin({
             ],
             predicate: () => settings.store.chatMentions
         },
-        // Member List Role Headers
+        // Member List Role Headers (in threads)
         {
             find: 'tutorialId:"whos-online',
             replacement: [
                 {
-                    match: /,"aria-hidden":!0,children:\[.{0,200}— ",\i\]\}\)\]/,
-                    replace: ',"aria-hidden":!0,children:[$self.RoleGroupColor(arguments[0])]'
+                    match: /(?<=#{intl::CHANNEL_MEMBERS_A11Y_LABEL}.{0,400}?)children:(?=.{0,20}?(?:—|\\u2014) ",\i\])/,
+                    replace: "style:{color:$self.getRoleColor(arguments[0])},$&"
                 },
             ],
             predicate: () => settings.store.memberList
         },
+        // Member List Role Headers
         {
-            find: "#{intl::THREAD_BROWSER_PRIVATE}",
+            find: "?null:new Intl.NumberFormat",
             replacement: [
                 {
-                    match: /children:\[\i," — ",\i\]/,
-                    replace: "children:[$self.RoleGroupColor(arguments[0])]"
+                    match: /(?<=#{intl::CHANNEL_MEMBERS_A11Y_LABEL},\{title:\i,count:\i\}\)\}\),\(0,\i\.jsxs\)\("div",\{)/,
+                    replace: "style:{color:$self.getRoleColor(arguments[0])},"
                 },
             ],
             predicate: () => settings.store.memberList
@@ -128,7 +130,7 @@ export default definePlugin({
             find: "#{intl::GUEST_NAME_SUFFIX})]",
             replacement: [
                 {
-                    match: /#{intl::GUEST_NAME_SUFFIX}.{0,50}?"".{0,100}\](?=\}\))(?<=guildId:(\i),.+?user:(\i).+?)/,
+                    match: /#{intl::GUEST_NAME_SUFFIX}.{0,50}?"".*?\](?=\})(?<=guildId:(\i),.+?user:(\i).+?)/,
                     replace: "$&,style:$self.getColorStyle($2.id,$1),"
                 }
             ],
@@ -138,8 +140,7 @@ export default definePlugin({
         {
             find: "MessageReactions.render:",
             replacement: {
-                // FIXME: (?:medium|normal) is for stable compat
-                match: /tag:"strong",variant:"text-md\/(?:medium|normal)"(?<=onContextMenu:.{0,15}\((\i),(\i),\i\).+?)/,
+                match: /tag:"strong",variant:"text-md\/medium"(?<=onContextMenu:.{0,15}\((\i),(\i),\i\).+?)/,
                 replace: "$&,style:$self.getColorStyle($2?.id,$1?.channel?.id)"
             },
             predicate: () => settings.store.reactorsList,
@@ -166,7 +167,7 @@ export default definePlugin({
 
     getColorString(userId: string, channelOrGuildId: string) {
         try {
-            if (Settings.plugins.CustomUserColors.enabled) {
+            if (isPluginEnabled(customUserColors.name)) {
                 const customColor = getCustomColorString(userId, true);
                 if (customColor) return customColor;
             }
@@ -219,17 +220,9 @@ export default definePlugin({
         return null;
     },
 
-    RoleGroupColor: ErrorBoundary.wrap(({ id, count, title, guildId, label }: { id: string; count: number; title: string; guildId: string; label: string; }) => {
-        const role = GuildRoleStore.getRole(guildId, id);
-
-        return (
-            <span style={{
-                color: role?.colorString,
-                fontWeight: "unset",
-                letterSpacing: ".05em"
-            }}>
-                {title ?? label} &mdash; {count}
-            </span>
-        );
-    }, { noop: true })
+    getRoleColor(props: any) {
+        try {
+            return GuildRoleStore.getRole(props?.guildId, props?.id)?.colorString;
+        } catch (e) { }
+    }
 });

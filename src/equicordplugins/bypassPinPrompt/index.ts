@@ -10,6 +10,7 @@ import definePlugin from "@utils/types";
 export default definePlugin({
     name: "BypassPinPrompt",
     description: "Bypass the pin prompt when using the pin functions",
+    tags: ["Shortcuts"],
     authors: [Devs.thororen],
     patches: [
         ...[
@@ -20,7 +21,7 @@ export default definePlugin({
             find,
             replacement: [
                 {
-                    match: /(\i\.\i\.(unpin|pin)Message\(\i,\i\.id\)):\i\.\i\.confirm(Unpin|Pin)\(\i,\i\)/g,
+                    match: /(\i\.\i\.(?:unpin|pin)Message\(\i,\i\.id\)):\i\.\i\.confirm(?:Unpin|Pin)\(\i,\i\)/g,
                     replace: "$1:$1"
                 }
             ]

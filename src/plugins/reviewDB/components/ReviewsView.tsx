@@ -19,7 +19,7 @@
 import { Paragraph } from "@components/Paragraph";
 import { Auth, authorize } from "@plugins/reviewDB/auth";
 import { Review, ReviewType } from "@plugins/reviewDB/entities";
-import { addReview, getReviews, Response, REVIEWS_PER_PAGE } from "@plugins/reviewDB/reviewDbApi";
+import { addReview, getReviews, REVIEWS_PER_PAGE, UserReviewsData } from "@plugins/reviewDB/reviewDbApi";
 import { settings } from "@plugins/reviewDB/settings";
 import { cl, showToast } from "@plugins/reviewDB/utils";
 import { useAwaiter, useForceUpdater } from "@utils/react";
@@ -40,7 +40,7 @@ interface UserProps {
 }
 
 interface Props extends UserProps {
-    onFetchReviews(data: Response): void;
+    onFetchReviews(data: UserReviewsData): void;
     refetchSignal?: unknown;
     showInput?: boolean;
     page?: number;
@@ -62,13 +62,15 @@ export default function ReviewsView({
 }: Props) {
     const [signal, refetch] = useForceUpdater(true);
 
-    const [reviewData] = useAwaiter(() => getReviews(discordId, (page - 1) * REVIEWS_PER_PAGE), {
+    const [reviewData] = useAwaiter(() => getReviews(discordId, { offset: (page - 1) * REVIEWS_PER_PAGE, limit: REVIEWS_PER_PAGE, fetchVotes: true }), {
         fallbackValue: null,
         deps: [refetchSignal, signal, page],
         onSuccess: data => {
-            if (settings.store.hideBlockedUsers)
-                data!.reviews = data!.reviews?.filter(r => !RelationshipStore.isBlocked(r.sender.discordID));
+            if (settings.store.hideBlockedUsers) data!.reviews = data!.reviews?.filter(r => !RelationshipStore.isBlocked(r.sender.discordID));
+            const systemReviews = data!.reviews.filter(r => r.type === ReviewType.System);
+            const normalReviews = data!.reviews.filter(r => r.type !== ReviewType.System);
 
+            data!.reviews = [...systemReviews, ...normalReviews];
             scrollToTop?.();
             onFetchReviews(data!);
         }
@@ -123,7 +125,7 @@ function ReviewList({ refetch, reviews, hideOwnReview, profileId, type }: { refe
 }
 
 export function ReviewsInputComponent(
-    { discordId, isAuthor, refetch, name, modalKey, repliesTo }: { discordId: string, name: string; isAuthor: boolean; refetch(): void; modalKey?: string; repliesTo?: number; }
+    { discordId, isAuthor, refetch, name, modalKey }: { discordId: string, name: string; isAuthor: boolean; refetch(): void; modalKey?: string; }
 ) {
     const { token } = Auth;
     const editorRef = useRef<any>(null);
@@ -146,10 +148,9 @@ export function ReviewsInputComponent(
                     placeholder={
                         !token
                             ? "You need to authorize to review users!"
-                            : repliesTo ? `Reply to @${name}`
-                                : isAuthor
-                                    ? `Update review for @${name}`
-                                    : `Review @${name}`
+                            : isAuthor
+                                ? `Update review for @${name}`
+                                : `Review @${name}`
                     }
                     type={inputType}
                     disableThemedBackground={true}
@@ -158,12 +159,9 @@ export function ReviewsInputComponent(
                     textValue=""
                     onSubmit={
                         async res => {
-                            // I know this naming is deranged, but for compatibility it has to stay this way
-
                             const response = await addReview({
                                 userid: discordId,
                                 comment: res.value,
-                                repliesto: repliesTo,
                             });
 
                             if (response) {

@@ -13,8 +13,8 @@ import type { ComponentType, JSX, MouseEventHandler, ReactNode } from "react";
 
 const logger = new Logger("HeaderBarAPI");
 
-const HeaderBarClasses = findCssClassesLazy("clickable", "withHighlight");
-const HeaderBarIcon = findComponentByCodeLazy(".HEADER_BAR_BADGE_TOP:", '"aria-haspopup":') as ComponentType<ChannelToolbarButtonProps>;
+const HeaderBarClasses = findCssClassesLazy("clickable", "selected", "badge", "badgeContainer");
+const HeaderBarIcon = findComponentByCodeLazy("tooltipPosition:", '"aria-haspopup":', '"data-jump-section":') as ComponentType<ChannelToolbarButtonProps>;
 
 export interface HeaderBarButtonProps {
     /** The icon component to render inside the button */
@@ -101,8 +101,8 @@ export function HeaderBarButton(props: HeaderBarButtonProps & { ref?: React.RefO
             {({ onMouseEnter, onMouseLeave }) => (
                 <Clickable
                     {...{ innerRef: ref } as any}
-                    className={classes(HeaderBarClasses.clickable, HeaderBarClasses.withHighlight, className)}
-                    style={{ width: iconSize, boxSizing: "content-box", justifyContent: "center" }}
+                    className={classes(HeaderBarClasses.clickable, className)}
+                    style={{ width: Math.max(iconSize, 24), height: Math.max(iconSize, 24), boxSizing: "content-box", justifyContent: "center" }}
                     onClick={onClick}
                     onContextMenu={onContextMenu}
                     onMouseEnter={onMouseEnter}

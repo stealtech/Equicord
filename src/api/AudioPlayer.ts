@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { findByCodeLazy, findLazy } from "webpack";
+import { findByCodeLazy, findLazy } from "@webpack";
 
 let defaultSounds: null | string[] = null;
 const findDefaultSounds = findLazy(module => module.resolve && module.id && module.keys().some(key => key.endsWith(".mp3")), false);
@@ -184,11 +184,11 @@ export function createAudioPlayer(
     options: AudioPlayerOptions = {}
 ): AudioPlayerInterface {
     const internalPlayer: AudioPlayerInternal = new AudioPlayerConstructor(
+        options,
         audio,
         null,
         null,
-        "default",
-        options
+        "default"
     );
 
     return new AudioPlayerWrapper(internalPlayer);

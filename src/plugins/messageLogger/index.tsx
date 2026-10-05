@@ -15,14 +15,15 @@ import { isPluginEnabled } from "@api/PluginManager";
 import { definePluginSettings } from "@api/Settings";
 import { disableStyle, enableStyle } from "@api/Styles";
 import ErrorBoundary from "@components/ErrorBoundary";
+import { DeleteIcon, EyeIcon } from "@components/Icons";
 import { Devs, EQUIBOT_USER_ID, EquicordDevs, SUPPORT_CHANNEL_ID, VC_SUPPORT_CATEGORY_ID, VENBOT_USER_ID } from "@utils/constants";
 import { getIntlMessage } from "@utils/discord";
 import { Logger } from "@utils/Logger";
 import { classes } from "@utils/misc";
 import definePlugin, { OptionType } from "@utils/types";
-import { Message } from "@vencord/discord-types";
+import { Message, MessageAttachment } from "@vencord/discord-types";
 import { findCssClassesLazy } from "@webpack";
-import { ChannelStore, FluxDispatcher, Menu, MessageStore, Parser, SelectedChannelStore, Timestamp, UserStore, useStateFromStores } from "@webpack/common";
+import { AuthenticationStore, ChannelStore, FluxDispatcher, Menu, MessageStore, Parser, SelectedChannelStore, Timestamp, UserStore, useStateFromStores } from "@webpack/common";
 
 import overlayStyle from "./deleteStyleOverlay.css?managed";
 import textStyle from "./deleteStyleText.css?managed";
@@ -34,6 +35,15 @@ interface MLMessage extends Message {
     editHistory?: { timestamp: Date; content: string; }[];
     firstEditTimestamp?: Date;
     diffViewDisabled?: boolean;
+}
+
+interface MLAttachment extends MessageAttachment {
+    /**
+     * if the attachment was deleted
+     *
+     * a non-deleted {@link MLMessage|Message} can have deleted attachments
+     */
+    deleted?: boolean;
 }
 
 const MessageClasses = findCssClassesLazy("edited", "communicationDisabled", "isSystemMessage");
@@ -56,6 +66,37 @@ function addDeleteStyle() {
     }
 }
 
+/**
+ * Clears a message's history (edit + attachments)
+ *
+ * if the message was deleted, it will be completely removed from the UI and MessageStore
+ */
+function clearMessageHistory(msg: MLMessage) {
+    if (msg.deleted) {
+        FluxDispatcher.dispatch({
+            type: "MESSAGE_DELETE",
+            channelId: msg.channel_id,
+            id: msg.id,
+            mlDeleted: true
+        });
+    } else {
+        const attachments = msg.attachments?.filter((a: MLAttachment) => !a.deleted);
+
+        updateMessage(msg.channel_id, msg.id, { editHistory: [], attachments });
+    }
+}
+
+/**
+ * checks if a message has any history (deleted or edited)
+ * @param message the message to check
+ *
+ * @returns true if the message has any history, false otherwise
+ */
+function doesMessageHaveHistory(message: MLMessage): boolean {
+    return message.deleted || !!message.editHistory?.length || message.attachments?.some((a: MLAttachment) => a.deleted);
+
+}
+
 const REMOVE_HISTORY_ID = "ml-remove-history";
 const TOGGLE_DELETE_STYLE_ID = "ml-toggle-style";
 const TOGGLE_DIFF_VIEW_ID = "ml-toggle-diff";
@@ -64,9 +105,8 @@ const patchMessageContextMenu: NavContextMenuPatchCallback = (
     props,
 ) => {
     const { message } = props;
-    const { deleted, editHistory, id, channel_id } = message;
-
-    if (!deleted && !editHistory?.length) return;
+    const { deleted, id, channel_id } = message;
+    if (!doesMessageHaveHistory(message)) return;
 
     toggle: {
         if (!deleted) break toggle;
@@ -81,6 +121,7 @@ const patchMessageContextMenu: NavContextMenuPatchCallback = (
                 id={TOGGLE_DELETE_STYLE_ID}
                 key={TOGGLE_DELETE_STYLE_ID}
                 label="Toggle Deleted Highlight"
+                leadingAccessory={{ type: "icon", icon: EyeIcon }}
                 action={() => domElement.classList.toggle("messagelogger-deleted")}
             />,
         );
@@ -88,7 +129,7 @@ const patchMessageContextMenu: NavContextMenuPatchCallback = (
 
     // toggle per-message diff rendering when the message
     // has an edit history and the setting is enabled
-    if (editHistory?.length && settings.store.showEditDiffs) {
+    if (doesMessageHaveHistory(message) && settings.store.showEditDiffs) {
         const isDisabled = disabledDiffMessages.has(id);
         children.push(
             <Menu.MenuItem
@@ -122,18 +163,10 @@ const patchMessageContextMenu: NavContextMenuPatchCallback = (
             id={REMOVE_HISTORY_ID}
             key={REMOVE_HISTORY_ID}
             label={label}
+            leadingAccessory={{ type: "icon", icon: DeleteIcon }}
             color="danger"
             action={() => {
-                if (deleted) {
-                    FluxDispatcher.dispatch({
-                        type: "MESSAGE_DELETE",
-                        channelId: channel_id,
-                        id,
-                        mlDeleted: true,
-                    });
-                } else {
-                    message.editHistory = [];
-                }
+                clearMessageHistory(message);
             }}
         />,
     );
@@ -143,8 +176,8 @@ const patchChannelContextMenu: NavContextMenuPatchCallback = (
     children,
     { channel },
 ) => {
-    const messages = MessageStore.getMessages(channel?.id) as MLMessage[];
-    if (!messages?.some(msg => msg.deleted || msg.editHistory?.length)) return;
+    const messages = MessageStore.getMessages(channel?.id);
+    if (!messages?.some(msg => doesMessageHaveHistory(msg))) return;
 
     const group = findGroupChildrenByChildId("mark-channel-read", children) ?? children;
     group.push(
@@ -154,17 +187,7 @@ const patchChannelContextMenu: NavContextMenuPatchCallback = (
             color="danger"
             action={() => {
                 messages.forEach(msg => {
-                    if (msg.deleted)
-                        FluxDispatcher.dispatch({
-                            type: "MESSAGE_DELETE",
-                            channelId: channel.id,
-                            id: msg.id,
-                            mlDeleted: true,
-                        });
-                    else
-                        updateMessage(channel.id, msg.id, {
-                            editHistory: [],
-                        });
+                    clearMessageHistory(msg);
                 });
             }}
         />,
@@ -321,7 +344,7 @@ export function parseEditContent(content: string, message: Message, previousCont
     });
 }
 
-const settings = definePluginSettings({
+export const settings = definePluginSettings({
     deleteStyle: {
         type: OptionType.SELECT,
         description: "The style of deleted messages",
@@ -348,6 +371,12 @@ const settings = definePluginSettings({
         description: "Whether to log edited messages",
         default: true,
     },
+    logDeletedAttachments: {
+        type: OptionType.BOOLEAN,
+        description: "Whether to log deleted attachments",
+        default: true,
+        restartNeeded: true,
+    },
     inlineEdits: {
         type: OptionType.BOOLEAN,
         description: "Whether to display edit history as part of message content",
@@ -356,11 +385,16 @@ const settings = definePluginSettings({
     ignoreBots: {
         type: OptionType.BOOLEAN,
         description: "Whether to ignore messages by bots",
-        default: false,
+        default: true,
     },
     ignoreSelf: {
         type: OptionType.BOOLEAN,
         description: "Whether to ignore messages by yourself",
+        default: false,
+    },
+    ignoreSelfEdits: {
+        type: OptionType.BOOLEAN,
+        description: "Whether to ignore edits by yourself",
         default: false,
     },
     ignoreUsers: {
@@ -402,12 +436,18 @@ const settings = definePluginSettings({
             return !this.store.showEditDiffs;
         },
     },
+    ignoreSelfEdits: {
+        disabled() {
+            return this.store.ignoreSelf;
+        },
+    },
 });
 
 export default definePlugin({
     name: "MessageLogger",
     description: "Temporarily logs deleted and edited messages.",
-    authors: [Devs.rushii, Devs.Ven, Devs.AutumnVN, Devs.Nickyux, Devs.Kyuuhachi, EquicordDevs.justjxke],
+    tags: ["Chat", "Utility"],
+    authors: [Devs.rushii, Devs.Ven, Devs.AutumnVN, Devs.Nickyux, Devs.Kyuuhachi, Devs.sadan, EquicordDevs.justjxke],
     dependencies: ["MessageUpdaterAPI"],
     isModified: true,
     settings,
@@ -539,11 +579,25 @@ export default definePlugin({
         };
     },
 
-    handleDelete(
-        cache: any,
-        data: { ids: string[]; id: string; mlDeleted?: boolean; },
-        isBulk: boolean,
-    ) {
+    handleUpdateAttachments(newMessage: MLMessage): MLAttachment[] {
+        const oldMessage = MessageStore.getMessage(newMessage.channel_id, newMessage.id) as MLMessage | undefined;
+        // if oldMessage is undefined, this is a new message and we shouldn't touch the attachments
+        if (!oldMessage || this.shouldIgnore(newMessage, true)) {
+            return newMessage.attachments;
+        }
+        // not sure if it's ever actually null after an edit but discord does a null check here
+        if (!newMessage.attachments?.length) {
+            return oldMessage.attachments.map((a): MLAttachment => ({ ...a, deleted: true }));
+        }
+        return oldMessage.attachments
+            .map((oldAttachment): MLAttachment =>
+                newMessage.attachments.find(a => a.id === oldAttachment.id)
+                ?? { ...oldAttachment, deleted: true }
+            )
+            .concat(newMessage.attachments.filter(a => !oldMessage.attachments.some(o => o.id === a.id)));
+    },
+
+    handleDelete(cache: any, data: { ids: string[], id: string; mlDeleted?: boolean; }, isBulk: boolean) {
         try {
             if (cache == null || (!isBulk && !cache.has(data.id))) return cache;
 
@@ -585,6 +639,7 @@ export default definePlugin({
             const {
                 ignoreBots,
                 ignoreSelf,
+                ignoreSelfEdits,
                 ignoreUsers,
                 ignoreChannels,
                 ignoreGuilds,
@@ -596,6 +651,7 @@ export default definePlugin({
             return (
                 (ignoreBots && message.author?.bot) ||
                 (ignoreSelf && message.author?.id === myId) ||
+                (ignoreSelfEdits && isEdit && message.author?.id === myId) ||
                 ignoreUsers.includes(message.author?.id) ||
                 ignoreChannels.includes(message.channel_id) ||
                 ignoreChannels.includes(
@@ -608,6 +664,24 @@ export default definePlugin({
                 (message.author?.id === EQUIBOT_USER_ID && ChannelStore.getChannel(message.channel_id)?.id === SUPPORT_CHANNEL_ID));
         } catch (e) {
             return false;
+        }
+    },
+
+    // It is possible to replace a message in place by creating a new message with the same nonce as an existing one.
+    // This is not considered an edit since it's a new message. Thus it bypasses our edit logging and can be used to "delete" a message by replacing it with an empty one.
+    // This fixes that bypass
+    normalizeNonce(msg: Message) {
+        try {
+            if (!msg.nonce || msg.author.id === AuthenticationStore.getId()) return;
+
+            const prevMsg = MessageStore.getMessage(msg.channel_id, msg.nonce);
+            if (!prevMsg || prevMsg.state !== "SENT") return;
+
+            if (prevMsg.id !== msg.id) {
+                delete msg.nonce;
+            }
+        } catch (e) {
+            console.error("[MessageLogger] Error normalizing nonce");
         }
     },
 
@@ -654,40 +728,41 @@ export default definePlugin({
 
     patches: [
         {
-            // MessageStore
             find: '"MessageStore"',
             replacement: [
                 {
                     // Add deleted=true to all target messages in the MESSAGE_DELETE event
-                    match: /function (?=.+?MESSAGE_DELETE:(\i))\1\((\i)\){let.+?((?:\i\.){2})getOrCreate.+?}(?=function)/,
-                    replace:
-                        "function $1($2){" +
-                        "   var cache = $3getOrCreate($2.channelId);" +
-                        "   cache = $self.handleDelete(cache, $2, false);" +
-                        "   $3commit(cache);" +
-                        "}"
+                    match: /(?<=MESSAGE_DELETE:function\((\i)\)\{)(?=let.{0,100}(\i\.\i)\.getOrCreate)/,
+                    replace: `
+                        let cache = $2.getOrCreate($1.channelId);
+                        cache = $self.handleDelete(cache, $1, false);
+                        $2.commit(cache);
+                        return;
+                    `
                 },
                 {
                     // Add deleted=true to all target messages in the MESSAGE_DELETE_BULK event
-                    match: /function (?=.+?MESSAGE_DELETE_BULK:(\i))\1\((\i)\){let.+?((?:\i\.){2})getOrCreate.+?}(?=function)/,
-                    replace:
-                        "function $1($2){" +
-                        "   var cache = $3getOrCreate($2.channelId);" +
-                        "   cache = $self.handleDelete(cache, $2, true);" +
-                        "   $3commit(cache);" +
-                        "}"
+                    match: /(?<=MESSAGE_DELETE_BULK:function\((\i)\){)(?=let.{0,100}(\i\.\i)\.getOrCreate)/,
+                    replace: `
+                        let cache = $2.getOrCreate($1.channelId);
+                        cache = $self.handleDelete(cache, $1, true);
+                        $2.commit(cache);
+                        return;
+                    `
                 },
                 {
                     // Add current cached content + new edit time to cached message's editHistory
-                    match: /(function (\i)\((\i)\).+?)\.update\((\i)(?=.*MESSAGE_UPDATE:\2)/,
-                    replace: "$1" +
-                        ".update($4,m =>" +
-                        "   (($3.message.flags & 64) === 64 || $self.shouldIgnore($3.message, true)) ? m :" +
-                        "   $3.message.edited_timestamp && $3.message.content !== m.content ?" +
-                        "       m.set('editHistory',[...(m.editHistory || []), $self.makeEdit($3.message, m)]) :" +
-                        "       m" +
-                        ")" +
-                        ".update($4"
+                    match: /(MESSAGE_UPDATE:function\((\i)\).+?)\.update\((\i)/,
+                    replace: `
+                        $1
+                        .update($3, m =>
+                            (($2.message.flags & 64) === 64 || $self.shouldIgnore($2.message, true)) ? m :
+                            $2.message.edited_timestamp && $2.message.content !== m.content ?
+                                m.set('editHistory',[...(m.editHistory || []), $self.makeEdit($2.message, m)]) :
+                                m
+                        )
+                        .update($3
+                    `
                 },
                 {
                     // fix up key (edit last message) attempting to edit a deleted message
@@ -714,52 +789,38 @@ export default definePlugin({
         },
 
         {
-            // Updated message transformer(?)
+            // Updated message transformer
             find: ".PREMIUM_REFERRAL&&(",
             replacement: [
                 {
-                    // Pass through editHistory & deleted & original attachments to the "edited message" transformer
-                    match:
-                        /(?<=null!=\i\.edited_timestamp\)return )\i\(\i,\{reactions:(\i)\.reactions.{0,50}\}\)/,
+                    // Pass through editHistory & deleted to the "edited message" transformer
+                    match: /(?<=null!=\i\.edited_timestamp\)return )\i\(\i,\{reactions:(\i)\.reactions.{0,50}\}\)/,
                     replace:
                         "Object.assign($&,{ deleted:$1.deleted, editHistory:$1.editHistory, firstEditTimestamp:$1.firstEditTimestamp, diffViewDisabled:$1.diffViewDisabled })",
                 },
-
+                // just mark deleted attachments as deleted on MESSAGE_UPDATE
                 {
-                    // Construct new edited message and add editHistory & deleted (ref above)
-                    // Pass in custom data to attachment parser to mark attachments deleted as well
-                    match: /attachments:(\i)\((\i)\)/,
-                    replace:
-                        "attachments: $1((() => {" +
-                        "   if ($self.shouldIgnore($2)) return $2;" +
-                        "   let old = arguments[1]?.attachments;" +
-                        "   if (!old) return $2;" +
-                        "   let new_ = $2.attachments?.map(a => a.id) ?? [];" +
-                        "   let diff = old.filter(a => !new_.includes(a.id));" +
-                        "   old.forEach(a => a.deleted = true);" +
-                        "   $2.attachments = [...diff, ...$2.attachments];" +
-                        "   return $2;" +
-                        "})())," +
-                        "deleted: arguments[1]?.deleted," +
-                        "editHistory: arguments[1]?.editHistory," +
-                        "firstEditTimestamp: new Date(arguments[1]?.firstEditTimestamp ?? $2.editedTimestamp ?? $2.timestamp)," +
-                        "diffViewDisabled: arguments[1]?.diffViewDisabled",
-                },
-                {
-                    // Preserve deleted attribute on attachments
-                    match: /(\((\i)\){return null==\2\.attachments.+?)spoiler:/,
-                    replace: "$1deleted: arguments[0]?.deleted," + "spoiler:",
-                },
-            ],
+                    match: /attachments:(\i)\.attachments\?\?\[\],/,
+                    predicate: () => settings.store.logDeletedAttachments,
+                    replace: "attachments: $self.handleUpdateAttachments($1),"
+                }
+            ]
         },
 
         {
             // Attachment renderer
             find: "#{intl::REMOVE_ATTACHMENT_TOOLTIP_TEXT}",
             replacement: [
+                // add deleted class to deleted attachments
                 {
-                    match: /\.SPOILER,(?=\[\i\.\i\]:)/,
-                    replace: '$&"messagelogger-deleted-attachment":arguments[0]?.item?.originalItem?.deleted,'
+                    // we can't use arguments[0] because we patch a nested **non-arrow** function
+                    match: /\.SPOILER,(?=\[\i\.\i\]:)(?<=item:(\i),.{0,200}?)/,
+                    replace: '$&"messagelogger-deleted-attachment": $1?.originalItem?.deleted,'
+                },
+                // dont allow deleting attachments from deleted messages
+                {
+                    match: /(?<=\{let\{[^}]*?item:(\i),autoPlayGif:\i,)canRemoveItem:(\i)(?=,onRemoveItem:)/,
+                    replace: "_canRemoveItem:$2 = arguments[0].canRemoveItem && !$1?.originalItem?.deleted",
                 }
             ]
         },
@@ -801,12 +862,12 @@ export default definePlugin({
             find: '"ReferencedMessageStore"',
             replacement: [
                 {
-                    match: /MESSAGE_DELETE:\i,/,
-                    replace: "MESSAGE_DELETE:()=>{},"
+                    match: /(?<=MESSAGE_DELETE:function\(\i\)\{)/,
+                    replace: "return;"
                 },
                 {
-                    match: /MESSAGE_DELETE_BULK:\i,/,
-                    replace: "MESSAGE_DELETE_BULK:()=>{},"
+                    match: /(?<=MESSAGE_DELETE_BULK:function\(\i\)\{)/,
+                    replace: "return;"
                 }
             ]
         },
@@ -840,11 +901,19 @@ export default definePlugin({
                     replace: '$&$1.type==="MESSAGE_GROUP_DELETED"||',
                 },
                 {
-                    match: /(\i).type===\i\.\i\.MESSAGE_GROUP_BLOCKED\?.*?:/,
-                    replace: '$&$1.type==="MESSAGE_GROUP_DELETED"?$self.DELETED_MESSAGE_COUNT:',
+                    match: /(\i).type===\i\.\i\.MESSAGE_GROUP_BLOCKED\?(\i)=.*?:/,
+                    replace: '$&$1.type==="MESSAGE_GROUP_DELETED"?$2=$self.DELETED_MESSAGE_COUNT:',
                 },
             ],
-            predicate: () => settings.store.collapseDeleted,
+            predicate: () => settings.store.collapseDeleted
         },
-    ],
+
+        {
+            find: "this.truncateTop",
+            replacement: {
+                match: /receiveMessage\((\i)\)\{/,
+                replace: "$& $self.normalizeNonce($1);"
+            }
+        }
+    ]
 });

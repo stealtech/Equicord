@@ -16,8 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { isPluginEnabled } from "@api/PluginManager";
 import { definePluginSettings } from "@api/Settings";
 import ErrorBoundary from "@components/ErrorBoundary";
+import NoBlockedMessagesPlugin from "@plugins/noBlockedMessages";
 import { Devs } from "@utils/constants";
 import { sleep } from "@utils/misc";
 import { Queue } from "@utils/Queue";
@@ -26,9 +28,20 @@ import definePlugin, { OptionType } from "@utils/types";
 import { CustomEmoji, Message, ReactionEmoji, User } from "@vencord/discord-types";
 import { ChannelStore, Constants, FluxDispatcher, React, RestAPI, useEffect, useLayoutEffect, UserStore, UserSummaryItem } from "@webpack/common";
 
+interface ReactionCacheEntry {
+    fetched: boolean;
+    users: Map<string, User>;
+}
+
+interface ReactionProps {
+    message: Message;
+    emoji: CustomEmoji;
+    type: number;
+}
+
 let Scroll: any = null;
 const queue = new Queue();
-let reactions: Record<string, ReactionCacheEntry>;
+let reactions: Record<string, ReactionCacheEntry> = {};
 
 function fetchReactions(msg: Message, emoji: ReactionEmoji, type: number) {
     const key = emoji.name + (emoji.id ? `:${emoji.id}` : "");
@@ -76,11 +89,40 @@ function handleClickAvatar(event: React.UIEvent<HTMLElement, Event>) {
     event.stopPropagation();
 }
 
+function ReactionUsers({ message, users }: { message: Message, users: User[]; }) {
+    useLayoutEffect(() => { // bc need to prevent autoscrolling
+        if (Scroll?.scrollCounter > 0) {
+            Scroll.setAutomaticAnchor(null);
+        }
+    });
+
+    return (
+        <div
+            style={{ marginLeft: "0.5em", transform: "scale(0.9)" }}
+        >
+            <div
+                onClick={handleClickAvatar}
+                onKeyDown={handleClickAvatar}
+                style={!settings.store.clickableAvatars ? { pointerEvents: "none" } : {}}
+            >
+                <UserSummaryItem
+                    users={users}
+                    guildId={ChannelStore.getChannel(message.channel_id)?.guild_id}
+                    renderIcon={false}
+                    max={5}
+                    showDefaultAvatarsForNullUsers
+                    showUserPopout
+                />
+            </div>
+        </div>
+    );
+}
+
 const settings = definePluginSettings({
-    avatarClick: {
-        description: "Toggle clicking avatars in reactions",
+    clickableAvatars: {
+        description: "While this is enabled, clicking a reacting user's avatar will open their profile instead of adding the reaction",
         type: OptionType.BOOLEAN,
-        default: false,
+        default: true,
         restartNeeded: true
     }
 });
@@ -88,22 +130,22 @@ const settings = definePluginSettings({
 export default definePlugin({
     name: "WhoReacted",
     description: "Renders the avatars of users who reacted to a message",
-    authors: [Devs.Ven, Devs.KannaDev, Devs.newwares],
-    isModified: true,
+    tags: ["Reactions", "Chat", "Appearance"],
+    authors: [Devs.Ven, Devs.KannaDev, Devs.newwares, Devs.paige],
     settings,
     patches: [
         {
             find: ",reactionRef:",
             replacement: {
-                match: /(\i)\?null:\(0,\i\.jsx\)\(\i\.\i,{className:\i\.reactionCount,.*?}\),/,
-                replace: "$&$1?null:$self.renderUsers(this.props),"
+                match: /(\i)\?null:\(0,\i\.jsx\)\(\i\.\i,{className:\i\.reactionCount,.*?}\),(?<=(emoji:\i,message:\i,type:\i).+?)/,
+                replace: "$&$1?null:$self.renderUsers({$2}),"
             }
         },
         {
             find: '"MessageReactionsStore"',
             replacement: {
-                match: /function (\i)\(\){(\i)={}(?=.*CONNECTION_OPEN:\1)/,
-                replace: "$&;$self.reactions=$2;"
+                match: /CONNECTION_OPEN:function\(\){(\i)={}/,
+                replace: "$&;$self.reactions=$1;"
             }
         },
         {
@@ -116,26 +158,8 @@ export default definePlugin({
         }
     ],
 
-    setScrollObj(scroll: any) {
-        Scroll = scroll;
-    },
-
-    renderUsers(props: RootObject) {
-        return props.message.reactions.length > 10 ? null : (
-            <ErrorBoundary noop>
-                <this.UsersComponent {...props} />
-            </ErrorBoundary>
-        );
-    },
-
-    UsersComponent({ message, emoji, type }: RootObject) {
+    renderUsers: ErrorBoundary.wrap(({ message, emoji, type }: ReactionProps) => {
         const forceUpdate = useForceUpdater();
-
-        useLayoutEffect(() => { // bc need to prevent autoscrolling
-            if (Scroll?.scrollCounter > 0) {
-                Scroll.setAutomaticAnchor(null);
-            }
-        });
 
         useEffect(() => {
             const cb = (e: any) => {
@@ -147,55 +171,27 @@ export default definePlugin({
             return () => FluxDispatcher.unsubscribe("MESSAGE_REACTION_ADD_USERS", cb);
         }, [message.id, forceUpdate]);
 
-        const reactions = getReactionsWithQueue(message, emoji, type);
-        const users = Array.from(reactions, ([id]) => UserStore.getUser(id)).filter(Boolean);
+        if (message.reactions.length > 10) return null;
 
-        return (
-            <div
-                style={{ marginLeft: "0.5em", transform: "scale(0.9)" }}
-            >
-                <div
-                    onClick={handleClickAvatar}
-                    onKeyDown={handleClickAvatar}
-                    style={settings.store.avatarClick ? {} : { pointerEvents: "none" }}
-                >
-                    <UserSummaryItem
-                        users={users}
-                        guildId={ChannelStore.getChannel(message.channel_id)?.guild_id}
-                        renderIcon={false}
-                        max={5}
-                        showDefaultAvatarsForNullUsers
-                        showUserPopout
-                    />
-                </div>
-            </div>
-        );
+        const reactionMap = getReactionsWithQueue(message, emoji, type);
+        let users = Array.from(reactionMap, ([id]) => UserStore.getUser(id)).filter(Boolean);
+
+        if (isPluginEnabled(NoBlockedMessagesPlugin.name))
+            users = users.filter(user => {
+                const { blocked, ignored } = NoBlockedMessagesPlugin.getRelationshipStatus(user);
+                return !(blocked || (ignored && NoBlockedMessagesPlugin.settings.store.alsoHideIgnoredUsers));
+            });
+
+        return users.length === 0
+            ? null
+            : <ReactionUsers message={message} users={users} />;
+    }, { noop: true }),
+
+    setScrollObj(scroll: any) {
+        Scroll = scroll;
     },
 
     set reactions(value: any) {
         reactions = value;
     }
 });
-
-interface ReactionCacheEntry {
-    fetched: boolean;
-    users: Map<string, User>;
-}
-
-interface RootObject {
-    message: Message;
-    readOnly: boolean;
-    isLurking: boolean;
-    isPendingMember: boolean;
-    useChatFontScaling: boolean;
-    emoji: CustomEmoji;
-    count: number;
-    burst_user_ids: any[];
-    burst_count: number;
-    burst_colors: any[];
-    burst_me: boolean;
-    me: boolean;
-    type: number;
-    hideEmoji: boolean;
-    remainingBurstCurrency: number;
-}

@@ -5,21 +5,17 @@
  */
 
 import { findGroupChildrenByChildId, NavContextMenuPatchCallback } from "@api/ContextMenu";
+import { RobotIcon } from "@components/Icons";
 import { EquicordDevs } from "@utils/constants";
-import definePlugin, { IconComponent } from "@utils/types";
+import definePlugin from "@utils/types";
 import { Message } from "@vencord/discord-types";
-import { findExportedComponentLazy } from "@webpack";
 import { ChannelStore, Menu } from "@webpack/common";
 
 import { settings } from "./settings";
-import { getResponse, handleResponse, parseMessageContent } from "./utils";
-
-const RobotIconLazy = findExportedComponentLazy("RobotIcon");
-const RobotIcon: IconComponent = props => <RobotIconLazy {...props} />;
+import { getPayload, getResponse, handleResponse } from "./utils";
 
 const messageCtxPatch: NavContextMenuPatchCallback = (children, { message }: { message: Message; }) => {
-    const payload = parseMessageContent(message);
-    if (!payload) return;
+    if (!message.content.trim() && !message.embeds.length && (!settings.store.supportImages || !message.attachments.some(att => att.content_type?.startsWith("image/")))) return;
 
     const group = findGroupChildrenByChildId("copy-text", children);
     if (!group) return;
@@ -29,7 +25,11 @@ const messageCtxPatch: NavContextMenuPatchCallback = (children, { message }: { m
             id="vc-trivia-ai"
             label="Answer With AI"
             icon={RobotIcon}
+            leadingAccessory={{ type: "icon", icon: RobotIcon }}
             action={async () => {
+                const payload = await getPayload(message);
+                if (!payload) return;
+
                 const ans = await getResponse(payload);
                 handleResponse(message, ans);
             }}
@@ -40,6 +40,8 @@ const messageCtxPatch: NavContextMenuPatchCallback = (children, { message }: { m
 export default definePlugin({
     name: "TriviaAI",
     description: "A plugin that helps you answer trivia questions using AI.",
+    dependencies: ["MessagePopoverAPI"],
+    tags: ["Appearance", "Customisation", "Fun"],
     authors: [EquicordDevs.yash],
     settings,
     contextMenus: {
@@ -48,8 +50,7 @@ export default definePlugin({
     messagePopoverButton: {
         icon: RobotIcon,
         render(message: Message) {
-            const payload = parseMessageContent(message);
-            if (!payload) return null;
+            if (!message.content.trim() && !message.embeds.length && (!settings.store.supportImages || !message.attachments.some(att => att.content_type?.startsWith("image/")))) return null;
 
             return {
                 label: "Answer With AI",
@@ -57,6 +58,9 @@ export default definePlugin({
                 message,
                 channel: ChannelStore.getChannel(message.channel_id),
                 onClick: async () => {
+                    const payload = await getPayload(message);
+                    if (!payload) return;
+
                     const ans = await getResponse(payload);
                     handleResponse(message, ans);
                 }

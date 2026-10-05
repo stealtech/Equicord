@@ -12,12 +12,8 @@ import { BatchedRequestQueue, isAllowedHost } from "./utils";
 
 /** Used for storing and automatically refreshing signed CDN/Media proxy urls ({@link https://docs.discord.food/reference#signed-attachment-urls}). */
 export const SignedUrlsStore = proxyLazyWebpack(() => {
-    interface Store {
-        get(url: string): string | null;
-        addSigned(url: string): void;
-    }
-
-    class SignedUrlsStore extends Flux.Store implements Store {
+    class SignedUrlsStoreClass extends Flux.Store {
+        public static readonly displayName = "SignedUrlsStore";
         private static readonly _expirationThreshold = 60 * 60 * 1000;
 
         private _urls = new Map<string, string>();
@@ -26,6 +22,7 @@ export const SignedUrlsStore = proxyLazyWebpack(() => {
             timeout: 50
         });
 
+        // Makes debugging easier with discord devtools
         __getLocalVars() {
             return { urls: this._urls, queue: this._queue };
         }
@@ -67,7 +64,7 @@ export const SignedUrlsStore = proxyLazyWebpack(() => {
 
         private _willExpire(url: URL): boolean {
             const expiryTimestamp = parseInt(url.searchParams.get("ex")!, 16) * 1000;
-            return isNaN(expiryTimestamp) || expiryTimestamp - SignedUrlsStore._expirationThreshold < Date.now();
+            return isNaN(expiryTimestamp) || expiryTimestamp - SignedUrlsStoreClass._expirationThreshold < Date.now();
         }
 
         private _update(urls: [string, string][]): void {
@@ -84,15 +81,12 @@ export const SignedUrlsStore = proxyLazyWebpack(() => {
         }
 
         private async _handleBatch(batch: string[]): Promise<void> {
-            await RestAPI.post({
-                url: Constants.Endpoints.ATTACHMENTS_REFRESH_URLS,
-                body: { attachment_urls: batch },
-                retries: 3
-            }).then(({ body }: { body: RefreshedUrlsResponse; }) =>
-                this._update(body.refreshed_urls.map(({ original, refreshed }) => [original, refreshed!]))
-            );
+            await RestAPI.post({ url: Constants.Endpoints.ATTACHMENTS_REFRESH_URLS, body: { attachment_urls: batch }, retries: 3 })
+                .then(({ body }: { body: RefreshedUrlsResponse; }) =>
+                    this._update(body.refreshed_urls.map(({ original, refreshed }) => [original, refreshed!]))
+                );
         }
     }
 
-    return new SignedUrlsStore(FluxDispatcher) as Store;
+    return new SignedUrlsStoreClass(FluxDispatcher);
 });

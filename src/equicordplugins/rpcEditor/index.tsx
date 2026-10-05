@@ -73,13 +73,14 @@ const settings = definePluginSettings({
 export default definePlugin({
     name: "RPCEditor",
     description: "Edit the type and content of any Rich Presence",
+    tags: ["Customisation"],
     authors: [Devs.Nyako, Devs.nin0dev],
     patches: [
         {
             find: '"LocalActivityStore"',
             replacement: {
-                match: /\i\(\i\)\{.{0,25}activity:(\i).*?\}=\i;/,
-                replace: "$&$self.patchActivity($1);",
+                match: /(function\(\i\)\{.{0,40}activity:(\i).{0,25}=\i),(\i)/,
+                replace: "$1;$self.patchActivity($2);let $3",
             }
         }
     ],

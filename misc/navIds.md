@@ -1,65 +1,79 @@
-# NavIDs
+# Navigation IDs
 
-If you have `ConsoleShortcuts` enabled you can run loadLazyChunks()
-to get every navId after it loads everything with the section below
+1. Open console and run `Vencord.Util.loadLazyChunks();`
+2. Once it prints Finished loading all chunks! run the script below
 
 ```js
-const wp = webpackChunkdiscord_app.push([[Symbol()], {}, r => r]);
-const navIds = [...new Set(
-  Object.values(wp.m).flatMap(f =>
-    [...Function.prototype.toString.call(f)
-      .matchAll(/navId:\s*["'`]([^"'`]+)["'`]/g)]
-      .map(m => m[1])
-  )
-)].sort().join("\n");
-console.log(navIds);
-copy(navIds);
+function makeNavIdList() {
+    const navIds = new Set();
+
+    for (const factory of Object.values(Vencord.Webpack.wreq.m)) {
+        const src = String(factory);
+        if (!src.includes("navId")) continue;
+
+        for (const [, , id] of src.matchAll(/navId:\s*(["'`])([^"'`$\\]+)\1/g)) {
+            navIds.add(id);
+        }
+    }
+
+    return Array.from(navIds).sort().join("\n");
+}
+copy(makeNavIdList())
 ```
 
-Updated: 3/1/2026
-
 ```md
-ChannelNotificationCustomSettingsItems
-accept-invite-modal-settings-menu
+activity-custom-context
 activity-popout-overflow-popout
 activity-shelf-item-context
 add-questions
+app-channel-header-overflow
 app-details-more-menu
 application-directory-profile
 attachment-link-context
 audio-device-context
 authorized-app-action-menu
 automod-rule-context
+avatar-edit-context
+badge-customization-context
+badge-directory-earnable
+badge-directory-owned
+banner-edit-context
 channel-attach
 channel-autocomplete
 channel-context
 channel-mention-context
 channel-summaries-context-menu
+channel-tab-context
+clean-up-gdms-sort
+clean-up-inactive-gdms
 clips-context
-clips-filters-context
+clips-method-menu
 clips-more-options
-collectibles-index-page-menu
-collectibles-shop-tabs-overflow-menu
+clips-sort-menu
 command-list-sort
 component-button
-copy-id
 dev-context
+device-detected-panel-more-actions
 devtools-overflow
 devtools-popout
 download-app-menu
 edit-profile-popout
+emoji-picker-categories
 emoji-studio-context-menu
 exit-options
 expression-picker
-favorite-server-context
+favorite-guild-header-add-context
+favorites-channel-list-context
 favorites-header-popout
 forum-tag
 friend-row
 game-context
+game-profile-add-to-profile
 game-profile-context
 game-shop-context
 game_server-popout-context-menu
 gdm-context
+gif-picker
 global-discovery-search-filter-options
 global-discovery-tabs-overflow-menu
 group-context-menu
@@ -76,6 +90,8 @@ guild-product-context
 guild-role-connections-context
 guild-settings-role-context
 guild-shop-context
+guild-sort-order-menu
+hangout-window-context
 image-context
 image-menu
 invite-roles-menu
@@ -87,7 +103,6 @@ manage-streams
 member-application-context-menu
 member-list-settings-menu
 member-safety-flags
-member-safety-guild-member-${g}-menu
 member-safety-roles
 members-table-join-method-menu
 members-table-sort-menu
@@ -100,12 +115,12 @@ message-reminder-create
 moderation-raid-context
 more-settings-context
 non-user-bot-profile-overflow-menu
-notification-actions
 notifications-inbox-message-context
 now-playing-menu
 overlay
 overlay-channel-context
 overlay-click-zone-debug-context-menu
+overlay-clips-menu
 overlay-gdm-context
 overlay-go-live-widget-context-menu
 overlay-group-context-menu
@@ -114,18 +129,23 @@ overlay-report-to-mod-channel-context
 overlay-user-context
 overlay-video-widget-context-menu
 overlay-voice-widget-context-menu
+personal-widget-image-edit-menu
 pip-menu
 plaintext-preview-overflow-menu
+play-on-distributor-menu
+playground-copy-link-menu
 playground-settings-menu
 poll-media-edit-menu
 progress-bar-context
 quests-entry
 recents-notifications
 recents-thread-notifications
+registered-game-overflow-menu
 report-to-mod-channel-context
 role-icon-context
 role-subscription-context
 rtc-channel
+schedule-actions
 search-result-sort-menu
 search-results
 search-settings-cog
@@ -134,19 +154,22 @@ set-image-for-action
 set-status-submenu
 set-status-submenu-mobile-web
 settings-footer-more-menu
+settings-menu
+slayer-storefront-shop-dropdown
+social-layer-storefront-card-context
 sort-and-view
 sound-button-context
+soundboard-picker-categories
 staff-help-popout
 staff-only-entry-debug
 stream-context
 stream-options
 subscription-context
 switch-accounts-submenu
-test-skus
-test-store-listing
 text-context
 textarea-context
 thread-context
+unapplied-boost-actions
 unknown-user-context
 user-bot-profile-add-app
 user-bot-profile-overflow-menu
@@ -155,9 +178,14 @@ user-profile-friend-request-buttons
 user-profile-overflow-menu
 user-profile-widget-context-menu
 user-settings-change-avatar
-user-settings-cog
+vibegrations-channel-overflow
+vibegrations-composer-attach
+vibegrations-create
+vibegrations-import-scope
 video-background-context
 video-device-context
+video-player-overflow
+voice-channel-app-menu
 webauthn-credential-actions
 welcome-settings-context
 widget-game-tags

@@ -4,24 +4,14 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { app } from "electron";
-import { RendererSettings } from "main/settings";
+import { RendererSettings } from "@main/settings";
+import { app, session } from "electron";
 
-app.on("browser-window-created", (_, win) => {
-    win.webContents.on("frame-created", (_, { frame }) => {
-        frame?.once("dom-ready", () => {
-            if (frame.url.startsWith("https://www.youtube.com/")) {
-                const settings = RendererSettings.store.plugins?.FixYoutubeEmbeds;
-                if (!settings?.enabled) return;
+app.whenReady().then(() => {
+    session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ["https://www.youtube.com/embed/*"] }, ({ requestHeaders, resourceType }, callback) => {
+        if (resourceType === "subFrame" && RendererSettings.store.plugins?.FixYoutubeEmbeds?.enabled)
+            requestHeaders.Referer = "https://media.discordapp.com/";
 
-                frame.executeJavaScript(`
-                new MutationObserver(() => {
-                    if(
-                        document.querySelector('div.ytp-error-content-wrap-subreason a[href*="www.youtube.com/watch?v="]')
-                    ) location.reload()
-                }).observe(document.body, { childList: true, subtree:true });
-                `);
-            }
-        });
+        callback({ requestHeaders });
     });
 });

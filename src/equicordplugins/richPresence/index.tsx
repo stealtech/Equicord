@@ -12,7 +12,7 @@ import { migrateOldSettings } from "./migration";
 import * as abs from "./services/audiobookshelf";
 import * as gensokyoRadio from "./services/gensokyoRadio";
 import * as jellyfin from "./services/jellyfin";
-import * as listenbrainz from "./services/listenbrainz";
+import * as navidrome from "./services/navidrome";
 import * as statsfm from "./services/statsfm";
 import * as tosu from "./services/tosu";
 import { setOnServiceChange, settings, SettingsStore } from "./settings";
@@ -22,80 +22,84 @@ type SettingsKey = keyof SettingsStore;
 
 const logger = new Logger("RichPresence");
 
-const services: Record<string, { start(): void; stop(): void }> = {
-	[ServiceTab.AudioBookShelf]: abs,
-	[ServiceTab.Tosu]: tosu,
-	[ServiceTab.StatsFm]: statsfm,
-	[ServiceTab.Jellyfin]: jellyfin,
-	[ServiceTab.ListenBrainz]: listenbrainz,
-	[ServiceTab.GensokyoRadio]: gensokyoRadio,
+const services: Record<string, { start(): void; stop(): void; forceUpdate?(): void; }> = {
+    [ServiceTab.AudioBookShelf]: abs,
+    [ServiceTab.Tosu]: tosu,
+    [ServiceTab.StatsFm]: statsfm,
+    [ServiceTab.Jellyfin]: jellyfin,
+    [ServiceTab.GensokyoRadio]: gensokyoRadio,
+    [ServiceTab.Navidrome]: navidrome,
 };
 
 const enableKeys: Record<string, SettingsKey> = {
-	[ServiceTab.AudioBookShelf]: "abs_enabled",
-	[ServiceTab.Tosu]: "tosu_enabled",
-	[ServiceTab.StatsFm]: "sfm_enabled",
-	[ServiceTab.Jellyfin]: "jf_enabled",
-	[ServiceTab.ListenBrainz]: "lb_enabled",
-	[ServiceTab.GensokyoRadio]: "gr_enabled",
+    [ServiceTab.AudioBookShelf]: "abs_enabled",
+    [ServiceTab.Tosu]: "tosu_enabled",
+    [ServiceTab.StatsFm]: "sfm_enabled",
+    [ServiceTab.Jellyfin]: "jf_enabled",
+    [ServiceTab.GensokyoRadio]: "gr_enabled",
+    [ServiceTab.Navidrome]: "nd_enabled",
 };
 
 const activeServices = new Set<string>();
 
 function syncServices() {
-	const globalEnabled = settings.store.enabled;
+    const globalEnabled = settings.store.enabled;
 
-	for (const [id, service] of Object.entries(services)) {
-		const shouldRun =
-			globalEnabled && !!settings.store[enableKeys[id]];
-		const isRunning = activeServices.has(id);
+    for (const [id, service] of Object.entries(services)) {
+        const shouldRun =
+            globalEnabled && !!settings.store[enableKeys[id]];
+        const isRunning = activeServices.has(id);
 
-		if (shouldRun && !isRunning) {
-			logger.info(`Starting ${id} service`);
-			service.start();
-			activeServices.add(id);
-		} else if (!shouldRun && isRunning) {
-			logger.info(`Stopping ${id} service`);
-			service.stop();
-			activeServices.delete(id);
-		}
-	}
+        if (shouldRun && !isRunning) {
+            logger.info(`Starting ${id} service`);
+            service.start();
+            activeServices.add(id);
+        } else if (!shouldRun && isRunning) {
+            logger.info(`Stopping ${id} service`);
+            service.stop();
+            activeServices.delete(id);
+        } else if (shouldRun && isRunning && service.forceUpdate) {
+            service.forceUpdate();
+        }
+    }
 }
 
 function stopAllServices() {
-	for (const id of activeServices) {
-		logger.info(`Stopping ${id} service`);
-		services[id].stop();
-	}
-	activeServices.clear();
+    for (const id of activeServices) {
+        logger.info(`Stopping ${id} service`);
+        services[id].stop();
+    }
+    activeServices.clear();
 }
 
 export default definePlugin({
-	name: "RichPresence",
-	description: "Unified rich presence hub for AudioBookShelf, osu!, stats.fm, Jellyfin, ListenBrainz, and Gensokyo Radio.",
-	authors: [
-		EquicordDevs.vmohammad,
-		Devs.AutumnVN,
-		EquicordDevs.Crxa,
-		Devs.SerStars,
-		EquicordDevs.ZcraftElite,
-		EquicordDevs.qouesm,
-		Devs.RyanCaoDev,
-		EquicordDevs.Prince527,
-		EquicordDevs.creations,
-	],
-	reporterTestable: ReporterTestable.None,
+    name: "RichPresence",
+    description: "Unified rich presence hub for AudioBookShelf, osu!, stats.fm, Jellyfin, Navidrome, and Gensokyo Radio.",
+    tags: ["Activity"],
+    authors: [
+        EquicordDevs.vmohammad,
+        Devs.AutumnVN,
+        EquicordDevs.Crxa,
+        Devs.SerStars,
+        EquicordDevs.ZcraftElite,
+        EquicordDevs.qouesm,
+        Devs.RyanCaoDev,
+        EquicordDevs.Prince527,
+        EquicordDevs.creations,
+        EquicordDevs.Star123451,
+    ],
+    reporterTestable: ReporterTestable.None,
 
-	settings,
+    settings,
 
-	start() {
-		migrateOldSettings();
-		syncServices();
-		setOnServiceChange(syncServices);
-	},
+    start() {
+        migrateOldSettings();
+        syncServices();
+        setOnServiceChange(syncServices);
+    },
 
-	stop() {
-		stopAllServices();
-		setOnServiceChange(null);
-	},
+    stop() {
+        stopAllServices();
+        setOnServiceChange(null);
+    },
 });

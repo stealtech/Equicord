@@ -13,7 +13,7 @@ import { proxyLazyWebpack } from "@webpack";
 import { Flux, FluxDispatcher } from "@webpack/common";
 
 function showNotif(title: string, body: string) {
-    if (settings.store.ShowFailedToasts) {
+    if (settings.store.showFailedToasts) {
         showNotification({
             color: "#ee2902",
             title,
@@ -22,6 +22,8 @@ function showNotif(title: string, body: string) {
         });
     }
 }
+
+let tidalStoreChangeListener: (() => void) | undefined;
 
 export const TidalLrcStore = proxyLazyWebpack(() => {
     let lyrics: EnhancedLyric[] | null = null;
@@ -49,6 +51,14 @@ export const TidalLrcStore = proxyLazyWebpack(() => {
     }
 
     TidalStore.addChangeListener(handleTidalStoreChange);
+    tidalStoreChangeListener = handleTidalStoreChange;
 
     return store;
 });
+
+export function stopTidalLrcStore() {
+    if (tidalStoreChangeListener) {
+        TidalStore.removeChangeListener(tidalStoreChangeListener);
+        tidalStoreChangeListener = undefined;
+    }
+}

@@ -11,15 +11,15 @@ import { DataStore } from "@api/index";
 import { definePluginSettings } from "@api/Settings";
 import { BaseText } from "@components/BaseText";
 import { Button } from "@components/Button";
+import { PencilIcon } from "@components/Icons";
 import { Paragraph } from "@components/Paragraph";
 import { Devs, EquicordDevs } from "@utils/constants";
 import { classNameFactory } from "@utils/css";
 import { Logger } from "@utils/Logger";
-import { openModal } from "@utils/modal";
 import definePlugin, { OptionType } from "@utils/types";
 import { Emoji, Message } from "@vencord/discord-types";
-import { findByPropsLazy, findExportedComponentLazy } from "@webpack";
-import { EmojiStore, Menu, TextInput, Toasts, useEffect, useState } from "@webpack/common";
+import { findByPropsLazy } from "@webpack";
+import { EmojiStore, Menu, openModal, showToast,TextInput, useEffect, useState } from "@webpack/common";
 
 import { ClearAliasesConfirmModal } from "./components/modals/ClearAliasesConfirmModal";
 import { SetAliasModal } from "./components/modals/SetAliasModal";
@@ -99,7 +99,6 @@ interface MessageContextMenuArgs {
 const DATA_KEY = "emoji-aliases";
 const logger = new Logger("EmojiAlias");
 const EmojiQueryService = findByPropsLazy("queryEmojiResults");
-const PencilIcon = findExportedComponentLazy("PencilIcon");
 const cl = classNameFactory("vc-emoji-alias-");
 
 let aliasMap: AliasMap = {};
@@ -701,18 +700,10 @@ async function removeAlias(alias: string) {
 
     try {
         await persistAliases(nextMap);
-        Toasts.show({
-            id: Toasts.genId(),
-            message: `Removed alias :${alias}:`,
-            type: Toasts.Type.SUCCESS
-        });
+        showToast(`Removed alias :${alias}:`, "success");
     } catch (error) {
         logger.error("Failed to remove emoji alias.", error);
-        Toasts.show({
-            id: Toasts.genId(),
-            message: "Failed to remove alias.",
-            type: Toasts.Type.FAILURE
-        });
+        showToast("Failed to remove alias.", "failure");
     }
 }
 
@@ -721,18 +712,10 @@ async function clearAliases() {
 
     try {
         await persistAliases({});
-        Toasts.show({
-            id: Toasts.genId(),
-            message: "Deleted all emoji aliases.",
-            type: Toasts.Type.SUCCESS
-        });
+        showToast("Deleted all emoji aliases.", "success");
     } catch (error) {
         logger.error("Failed to clear emoji aliases.", error);
-        Toasts.show({
-            id: Toasts.genId(),
-            message: "Failed to delete aliases.",
-            type: Toasts.Type.FAILURE
-        });
+        showToast("Failed to delete aliases.", "failure");
     }
 }
 
@@ -751,11 +734,7 @@ function openSetAliasModal(ref: StoredEmojiRef) {
             onSave={async input => {
                 const result = await saveAlias(input, ref);
                 if (!result.ok) return result;
-                Toasts.show({
-                    id: Toasts.genId(),
-                    message: `Alias set for ${getEmojiDisplayName(ref)}.`,
-                    type: Toasts.Type.SUCCESS
-                });
+                showToast(`Alias set for ${getEmojiDisplayName(ref)}.`, "success");
                 return result;
             }}
         />
@@ -1101,8 +1080,9 @@ const messageSendListener = (_channelId: string, messageObj: { content: string; 
 export default definePlugin({
     name: "FavoriteEmojiFirst",
     authors: [Devs.Aria, Devs.Ven, EquicordDevs.justjxke],
-    tags: ["EmojiAlias"],
+    tags: ["Emotes", "Customisation"],
     description: "Puts your favorite emoji first in the emoji autocomplete and also has emoji alias.",
+    dependencies: ["MessagePopoverAPI"],
     settings,
     contextMenus: {
         "expression-picker": expressionPickerPatch,
@@ -1142,7 +1122,7 @@ export default definePlugin({
                     replace: "$1Infinity"
                 },
                 {
-                    match: /(\i)\.slice\(0,(Math\.max\(\i,\i(?:-\i\.length){2}\))\)/,
+                    match: /(\i)\.slice\(0,(Math\.max\(\d+?,\i(?:-\i\.length){2}\))\)/,
                     replace: "($1.sliceTo = $2, $1)"
                 }
             ]

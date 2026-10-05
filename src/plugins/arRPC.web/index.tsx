@@ -23,7 +23,7 @@ import { Link } from "@components/Link";
 import { Paragraph } from "@components/Paragraph";
 import { Devs } from "@utils/constants";
 import definePlugin, { ReporterTestable } from "@utils/types";
-import { ApplicationAssetUtils, fetchApplicationsRPC, FluxDispatcher, Toasts } from "@webpack/common";
+import { ApplicationAssetUtils, fetchApplicationsRPC, FluxDispatcher, showToast } from "@webpack/common";
 
 async function lookupAsset(applicationId: string, key: string): Promise<string> {
     return (await ApplicationAssetUtils.fetchAssetIds(applicationId, [key]))[0];
@@ -42,6 +42,7 @@ migratePluginSettings("WebRichPresence", "WebRichPresence (arRPC)");
 export default definePlugin({
     name: "WebRichPresence",
     description: "Client plugin for arRPC to enable RPC on Discord Web (experimental)",
+    tags: ["Activity", "Utility"],
     authors: [Devs.Ducko],
     reporterTestable: ReporterTestable.None,
     hidden: !IS_EQUIBOP && !IS_VESKTOP && !("legcord" in window),
@@ -91,16 +92,7 @@ export default definePlugin({
             return;
         }
 
-        Toasts.show({
-            // show toast on success
-            message: "Connected to arRPC",
-            type: Toasts.Type.SUCCESS,
-            id: Toasts.genId(),
-            options: {
-                duration: 1000,
-                position: Toasts.Position.BOTTOM
-            }
-        });
+        showToast("Connected to arRPC", "success");
     },
 
     stop() {

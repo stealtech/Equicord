@@ -40,6 +40,7 @@ const UserContextMenuPatch: NavContextMenuPatchCallback = (children, { user }: U
             label="Copy User Mention"
             action={() => copyToClipboard(`<@${user.id}>`)}
             icon={MentionIcon}
+            leadingAccessory={{ type: "icon", icon: MentionIcon }}
         />
     );
 };
@@ -48,6 +49,7 @@ export default definePlugin({
     name: "CopyUserMention",
     authors: [EquicordDevs.Cortex, Devs.castdrian],
     description: "Adds a button to copy user's mention on the user context menu, works best with ValidUser.",
+    tags: ["Chat", "Utility"],
     contextMenus: {
         "user-context": UserContextMenuPatch
     }

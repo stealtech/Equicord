@@ -6,12 +6,21 @@
 
 import { RestAPI } from "@webpack/common";
 
+import { logger } from "./misc";
+
 export function isCdnUrlExpired(url: string): boolean {
+    if (
+        !url?.startsWith("https://cdn.discordapp.com")
+        && !url?.startsWith("https://media.discordapp.net")
+        && !url?.startsWith("https://images-ext-1.discordapp.net")
+        && !url?.startsWith("https://images-ext-2.discordapp.net")
+    ) return false;
     try {
         const ex = new URL(url).searchParams.get("ex");
         if (!ex) return false;
         return parseInt(ex, 16) * 1000 < Date.now();
-    } catch {
+    } catch (e) {
+        logger.warn("Failed to parse CDN URL expiry", e);
         return false;
     }
 }
@@ -28,7 +37,8 @@ export async function batchRefreshAttachmentUrls(urls: string[]): Promise<Record
             map[original] = refreshed;
         }
         return map;
-    } catch {
+    } catch (e) {
+        logger.warn("Failed to refresh attachment URLs", e);
         return {};
     }
 }

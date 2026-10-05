@@ -10,8 +10,8 @@ import { Paragraph } from "@components/Paragraph";
 import { Devs, EquicordDevs } from "@utils/constants";
 import definePlugin from "@utils/types";
 import { VoiceState } from "@vencord/discord-types";
-import { findByCodeLazy, findStoreLazy } from "@webpack";
-import { ChannelStore, MediaEngineStore, PermissionsBits, PermissionStore, SelectedChannelStore, showToast, Toasts, UserStore, VoiceActions, WindowStore } from "@webpack/common";
+import { findByCodeLazy } from "@webpack";
+import { ApplicationStreamingSettingsStore, ChannelStore, MediaEngineStore, PermissionsBits, PermissionStore, SelectedChannelStore, showToast, UserStore, VoiceActions, WindowStore } from "@webpack/common";
 
 import { getCurrentMedia, settings } from "./utils";
 
@@ -19,7 +19,6 @@ let hasStreamed, isStreaming, streamKey;
 const startStream = findByCodeLazy('type:"STREAM_START"');
 const stopStream = findByCodeLazy('type:"STREAM_STOP"');
 const StreamPreviewSettings = getUserSettingLazy("voiceAndVideo", "disableStreamPreviews")!;
-const ApplicationStreamingSettingsStore = findStoreLazy("ApplicationStreamingSettingsStore");
 
 async function autoStartStream(instant = true) {
     if (!instant && !WindowStore.isFocused() && settings.store.focusDiscord) return;
@@ -62,9 +61,10 @@ async function autoStartStream(instant = true) {
 export default definePlugin({
     name: "InstantScreenshare",
     description: "Instantly screenshare when joining a voice channel with support for desktop sources, windows, and video input devices (cameras, capture cards)",
+    tags: ["Media", "Voice"],
     authors: [Devs.HAHALOSAH, Devs.thororen, EquicordDevs.mart],
     dependencies: ["EquicordToolbox"],
-    tags: ["ScreenshareKeybind"],
+    searchTerms: ["ScreenshareKeybind"],
     autoStartStream,
     settings,
 
@@ -99,7 +99,7 @@ export default definePlugin({
             },
         },
         {
-            find: "keybindActionTypes()",
+            find: '"push-to-talk-priority"',
             predicate: () => settings.store.keybindScreenshare,
             replacement: {
                 match: /=\[(\{id:.{0,25}value:\i\.\i\.UNASSIGNED)/,
@@ -141,7 +141,7 @@ export default definePlugin({
     toolboxActions: {
         "Instant Screenshare"() {
             settings.store.toolboxManagement = !settings.store.toolboxManagement;
-            showToast(`Instant Screenshare ${settings.store.toolboxManagement ? "Enabled" : "Disabled"}`, Toasts.Type.SUCCESS);
+            showToast(`Instant Screenshare ${settings.store.toolboxManagement ? "Enabled" : "Disabled"}`, "success");
         }
     }
 });

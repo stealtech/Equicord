@@ -15,17 +15,13 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - uses: actions/checkout@v4
-            - uses: pnpm/action-setup@v3 # Install pnpm using packageManager key in package.json
+            - uses: actions/checkout@v7
 
-            - name: Use Node.js 20
-              uses: actions/setup-node@v4
+            - name: Setup PNPM
+              uses: pnpm/setup@v2.1.0
               with:
-                  node-version: 20
-                  cache: "pnpm"
-
-            - name: Install dependencies
-              run: pnpm install --frozen-lockfile
+                  runtime: node@v24
+                  require-lockfile: true
 
             - name: Lint & Test if desktop version compiles
               run: pnpm test

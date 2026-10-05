@@ -10,7 +10,7 @@ import { Devs } from "@utils/constants";
 import definePlugin from "@utils/types";
 import { findCssClassesLazy } from "@webpack";
 
-const { iconForeground } = findCssClassesLazy("iconForeground", "accountPopoutButtonWrapper");
+const accountClasses = findCssClassesLazy("iconForeground", "accountPopoutButtonWrapper");
 
 export default definePlugin({
     name: "UserAreaAPI",
@@ -19,11 +19,11 @@ export default definePlugin({
 
     patches: [
         {
-            find: ".DISPLAY_NAME_STYLES_COACHMARK),",
+            find: "#{intl::USER_PROFILE_ACCOUNT_POPOUT_BUTTON_A11Y_LABEL}",
             replacement: [
                 {
-                    match: /(?<=className:(\i)\.\i,style:\i,)children:\[/,
-                    replace: "children:[...$self.renderButtons(arguments[0],$1),"
+                    match: /children:\[(?=.{0,50}accountContainerRef:\i)/,
+                    replace: "children:[...$self.renderButtons(arguments[0]),"
                 },
                 // fix discord weird shrink with extra buttons
                 {
@@ -36,13 +36,17 @@ export default definePlugin({
 
     renderButtons(props: { nameplate?: any; }) {
         return Vencord.Api.UserArea._renderButtons({
-            nameplate: props.nameplate,
-            iconForeground: props.nameplate != null ? iconForeground : void 0,
+            nameplate: !this.shouldHideNameplate() ? props.nameplate : null,
+            iconForeground: accountClasses.iconForeground,
             hideTooltips: this.shouldHideTooltips()
         });
     },
 
     shouldHideTooltips() {
         return isPluginEnabled(declutter.name) && declutter.settings.store.removeButtonTooltips;
+    },
+
+    shouldHideNameplate() {
+        return isPluginEnabled(declutter.name) && declutter.settings.store.removeNameplate;
     }
 });

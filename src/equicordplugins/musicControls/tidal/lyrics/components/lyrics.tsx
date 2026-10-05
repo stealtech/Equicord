@@ -9,15 +9,14 @@ import { TooltipContainer } from "@components/TooltipContainer";
 import { settings } from "@equicordplugins/musicControls/settings";
 import { TidalLrcStore } from "@equicordplugins/musicControls/tidal/lyrics/providers/store";
 import { TidalStore } from "@equicordplugins/musicControls/tidal/TidalStore";
-import { openModal } from "@utils/modal";
-import { ContextMenuApi, useEffect, useState, useStateFromStores } from "@webpack/common";
+import { ContextMenuApi, openModal,useEffect, useState, useStateFromStores } from "@webpack/common";
 
 import { LyricsContextMenu } from "./ctxMenu";
 import { LyricsModal } from "./modal";
 import { cl, NoteSvg, useLyrics } from "./util";
 
 function LyricsDisplay({ scroll = true }: { scroll?: boolean; }) {
-    const { ShowMusicNoteOnNoLyrics } = settings.use(["ShowMusicNoteOnNoLyrics"]);
+    const { showMusicNoteOnNoLyrics } = settings.use(["showMusicNoteOnNoLyrics"]);
     const { lyrics, lyricRefs } = useLyrics({ scroll });
     const currentLyrics = lyrics || null;
     const NoteElement = NoteSvg(cl("music-note"));
@@ -37,7 +36,7 @@ function LyricsDisplay({ scroll = true }: { scroll?: boolean; }) {
     };
 
     if (!currentLyrics) {
-        return ShowMusicNoteOnNoLyrics ? (
+        return showMusicNoteOnNoLyrics ? (
             <div className="eq-tidal-lyrics"
                 onContextMenu={e => ContextMenuApi.openContextMenu(e, () => <LyricsContextMenu />)}
             >
